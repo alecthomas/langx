@@ -11,25 +11,32 @@ import (
 var (
 	lex = lexer.Must(regex.New(`
 		comment = //.*|(?s:/\*.*?\*/)
+		backslash = \\
+		whitespace = [\r\t ]+
+	
 		Keyword = \b(switch|case|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
 		Float = \b(\d*\.\d+)\b
 		Int = \b(\d+)\b
 		String = "(\\.|[^"])*"|'[^']*'
 		Newline = \n
-		backslash = \\
-		Punct = []` + "`" + `~[()!@#$%^&*{}:;?><,./=+-]
-		whitespace = [\r\t ]+
+		Operator = %=|>=|<=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%]
+		Punct = []` + "`" + `~[()!@#${}:;?,.]
 	`))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.Unquote(),
 	)
+	unaryParser = participle.MustBuild(&Unary{},
+		participle.Lexer(&fixupLexerDefinition{}),
+		participle.Unquote(),
+	)
 
-	identToken  = lex.Symbols()["Ident"]
-	stringToken = lex.Symbols()["String"]
-	intToken    = lex.Symbols()["Int"]
-	floatToken  = lex.Symbols()["Float"]
+	identToken    = lex.Symbols()["Ident"]
+	stringToken   = lex.Symbols()["String"]
+	intToken      = lex.Symbols()["Int"]
+	floatToken    = lex.Symbols()["Float"]
+	operatorToken = lex.Symbols()["Operator"]
 )
 
 type AST struct {
@@ -67,7 +74,7 @@ func (v Visibility) GoString() string {
 	}
 }
 
-func (v *Visibility) Parse(lex lexer.PeekingLexer) error {
+func (v *Visibility) Parse(lex *lexer.PeekingLexer) error {
 	token, err := lex.Peek(0)
 	if err != nil {
 		return err
@@ -190,96 +197,6 @@ type FuncDecl struct {
 	Throws     bool       `@"throws"?`
 	Return     *Type      `@@?`
 	Body       *Block     `@@`
-}
-
-type Expr struct {
-	Comparison *Comparison `@@`
-	Op         string      `[ @( "!" "=" | "=" "=" )`
-	Next       *Expr       `  @@ ]`
-}
-
-type Comparison struct {
-	Addition *Addition   `@@`
-	Op       string      `[ @( ">" | ">" "=" | "<" | "<" "=" )`
-	Next     *Comparison `  @@ ]`
-}
-
-type Addition struct {
-	Multiplication *Multiplication `@@`
-	Op             string          `[ @( "-" | "+" )`
-	Next           *Addition       `  @@ ]`
-}
-
-type Multiplication struct {
-	Assignment *Assignment     `@@`
-	Op         string          `[ @( "/" | "*" )`
-	Next       *Multiplication `  @@ ]`
-}
-
-type Assignment struct {
-	Unary *Unary `@@`
-	Op    string `[ @( ( "+" | "-" | "*" | "/" | "%" )? "=" )`
-	Next  *Expr  `  @@ ]`
-}
-
-type Unary struct {
-	Op       string    `  ( @( "!" | "-" )`
-	Unary    *Unary    `    @@ )`
-	Terminal *Terminal `| @@`
-}
-
-type Terminal struct {
-	Tuple   []*Expr        `(   "(" @@ ( "," @@ )* ")" `
-	Ident   string         `  | ( @Ident`
-	Struct  *StructLiteral `      @@? )`
-	Literal *Literal       `  | @@ )`
-
-	Subscript *Expr     `( "[" @@ "]" )?`
-	Reference *Terminal `( "." @@ )?`
-	Call      *Call     `@@?`
-}
-
-type Literal struct {
-	Int       *int64            `  @Int`
-	Float     *float64          `| @Float`
-	String    *string           `| @String`
-	Bool      *bool             `| ( @"true" | "false" )`
-	DictOrSet *DictOrSetLiteral `| @@`
-	Array     *ArrayLiteral     `| @@`
-	Struct    *StructLiteral    `| @@`
-}
-
-type DictOrSetLiteral struct {
-	Entries []*DictOrSetEntryLiteral `"{" @@ ( "," @@ )* ","? "}"`
-}
-
-// DictOrSetEntryLiteral in the form {"key0": 1, "key1": 2} or {1, 2, 3}
-type DictOrSetEntryLiteral struct {
-	Key *Expr `@@`
-	// Dicts and sets both use "{}" as delimiters, so we'll allow intermingling
-	// of key:value and value, then resolve during semantic analysis.
-	Value *Expr `( ":" @@ )?`
-}
-
-// ArrayLiteral in the form [1, 2, 3]
-type ArrayLiteral struct {
-	Values []*Expr `"[" ( @@ ( "," @@ )* )? ","? "]"`
-}
-
-// StructLiteral in the form {key: 1}
-type StructLiteral struct {
-	Fields []*StructLiteralField `"{" ( @@ ( "," @@ )* )? ","? "}"`
-}
-
-type StructLiteralField struct {
-	Key string `@Ident ":"`
-
-	Nested *StructLiteral `(  @@`
-	Value  *Expr          ` | @@ )`
-}
-
-type Call struct {
-	Parameters []*Expr `"(" ( @@ ( "," @@ )* )? ","? ")"`
 }
 
 func Parse(r io.Reader) (*AST, error) {

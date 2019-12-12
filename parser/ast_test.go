@@ -59,15 +59,15 @@ enum Option<T> {
 fn test() {
 	let result = Result.value("hello world")
 
-	switch result {
-	case value(value):
-		println(value)
+	switch (result) {
+	case value(v):
+		println(v)
 
-	case error(error):
-		panic(error)
+	case error(e):
+		panic(e)
 	}
 }
-	`
+`
 
 func BenchmarkParse(b *testing.B) {
 	fmt.Println(len(testSource))
