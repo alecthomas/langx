@@ -12,14 +12,14 @@ import (
 const testSource = `
 import "os"
 
-public struct Vector {
-    public let x, y, z float32 = (0, 0, 0)
+pub class Vector {
+    pub let x, y, z float = (0, 0, 0)
 
-    public fn length() float32 { // Pure.
+    override pub fn length() float { // Pure.
         return Math.sqrt(x * x + y * y + z * z)
     }
 
-    public fn add(other Vector) { // Impure.
+    pub fn add(other Vector) { // Impure.
         x += other.x
         y += other.y
         z += \
@@ -29,10 +29,13 @@ public struct Vector {
 			println(other.x)
 		}
 
+		go closure()
+
 		let v = Vector{x: 1}
 	
-		if x > 10 {
+		if (x > 10) {
 			x = 10
+			closure()
 		} else {
 			x = x
 		}
@@ -40,8 +43,6 @@ public struct Vector {
 }
 
 let origin = Vector{x: 0, y: 0, z: 0,}
-	
-alias Point Vector
 	
 enum Result<T> {
     case value(T)

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"io"
+	"strings"
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
@@ -14,14 +15,14 @@ var (
 		backslash = \\
 		whitespace = [\r\t ]+
 	
+		Modifier = \b(pub|override)\b
 		Keyword = \b(switch|case|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
-		Float = \b(\d*\.\d+)\b
-		Int = \b(\d+)\b
+		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
 		Newline = \n
-		Operator = %=|>=|<=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%]
-		Punct = []` + "`" + `~[()!@#${}:;?,.]
+		Operator = %=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!]
+		Punct = []` + "`" + `~[()@#${}:;?.,]
 	`))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
@@ -34,169 +35,203 @@ var (
 
 	identToken    = lex.Symbols()["Ident"]
 	stringToken   = lex.Symbols()["String"]
-	intToken      = lex.Symbols()["Int"]
-	floatToken    = lex.Symbols()["Float"]
+	numberToken   = lex.Symbols()["Number"]
 	operatorToken = lex.Symbols()["Operator"]
 )
 
 type AST struct {
+	Pos lexer.Position
+
 	Declarations []*Decl `@@*`
 }
 
 // Decl is a top-level declaration.
 type Decl struct {
-	Visibility Visibility `@@?`
+	Pos lexer.Position
 
-	Struct *StructDecl `(   @@ ";"?`
+	Modifiers Modifiers `@Modifier*`
+
+	Class  *ClassDecl  `(   @@ ";"?`
 	Import *ImportDecl `  | @@ ";"?`
 	Enum   *EnumDecl   `  | @@ ";"?`
-	Alias  *AliasDecl  `  | @@ ";"?`
-	Var    *LetStmt    `  | @@ ";"`
+	Var    *VarDecl    `  | @@ ";"`
 	Func   *FuncDecl   `  | @@ ";"? ) `
 }
 
-// Visibility of a field.
-type Visibility int
+// Modifiers of a field/function.
+type Modifiers int
 
 const (
-	VisibilityPrivate Visibility = iota
-	VisibilityPublic
+	ModifierPublic Modifiers = 1 << (2 * iota)
+	ModifierOverride
 )
 
-func (v Visibility) GoString() string {
-	switch v {
-	case VisibilityPrivate:
-		return "parser.VisibilityPrivate"
-	case VisibilityPublic:
-		return "parser.VisibilityPublic"
-	default:
-		panic(v)
+func (v Modifiers) GoString() string {
+	var modifiers []string
+	if v&ModifierOverride != 0 {
+		modifiers = append(modifiers, "parser.ModifierOverride")
 	}
+	if v&ModifierPublic != 0 {
+		modifiers = append(modifiers, "parser.ModifierPublic")
+	}
+	return strings.Join(modifiers, "|")
 }
 
-func (v *Visibility) Parse(lex *lexer.PeekingLexer) error {
-	token, err := lex.Peek(0)
-	if err != nil {
-		return err
-	}
-	switch token.Value {
-	case "public":
-		*v = VisibilityPublic
+func (v *Modifiers) Capture(values []string) error {
+	switch values[0] {
+	case "pub":
+		*v |= ModifierPublic
 
-	case "private":
-		*v = VisibilityPrivate
+	case "override":
+		*v = ModifierOverride
 
 	default:
-		return participle.NextMatch
+		panic("??")
 	}
-
-	_, _ = lex.Next()
 	return nil
 }
 
 type ImportDecl struct {
+	Pos lexer.Position
+
 	Alias  string `"import" @Ident?`
 	Import string `@String`
 }
 
-type AliasDecl struct {
-	Name  *Type `"alias" @@`
-	Alias *Type `@@`
-}
-
 type EnumDecl struct {
+	Pos lexer.Position
+
 	Name    *Type         `"enum" @@ "{"`
 	Members []*EnumMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
 type EnumMember struct {
-	Visibility Visibility `@@?`
+	Pos lexer.Position
+
+	Modifiers Modifiers `@Modifier*`
 
 	Case   *CaseDecl `(  @@`
 	Method *FuncDecl ` | @@ )`
 }
 
 type CaseDecl struct {
+	Pos lexer.Position
+
 	Case *Type  `"case" @@`
 	Var  string `( "(" @Ident ")" )?`
 }
 
-type StructDecl struct {
-	Name    *Type           `"struct" @@ "{"`
-	Members []*StructMember `( @@ ( ";" @@ )* ";"? )? "}"`
+type ClassDecl struct {
+	Pos lexer.Position
+
+	Name    *Type          `"class" @@ "{"`
+	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-type StructMember struct {
-	Visibility Visibility `@@?`
+type ClassMember struct {
+	Pos lexer.Position
 
-	Field  *LetStmt  `(  @@`
+	Modifiers Modifiers `@Modifier*`
+
+	Field  *VarDecl  `(  @@`
 	Method *FuncDecl ` | @@ )`
 }
 
 type Type struct {
+	Pos lexer.Position
+
 	Type     string          `@Ident`
 	Generics []*GenericParam `( "<" @@ ( "," @@ )* ","? ">" )?`
 }
 
 type GenericParam struct {
+	Pos lexer.Position
+
 	Name        string  `@Ident`
 	Constraints []*Type `( ":" @@ ( "," @@ )* )?`
 }
 
-type VarDecl struct {
-	Names []string `@Ident ("," @Ident)*`
-	Type  *Type    `@@`
+type Parameters struct {
+	Pos lexer.Position
+
+	Names []string  `@Ident ("," @Ident)*`
+	Type  *Terminal `@@`
 }
 
-type LetStmt struct {
-	Names   []string `"let" @Ident ("," @Ident)*`
-	Type    *Type    `@@?`
-	Default *Expr    `( "=" @@ )?`
+type VarDecl struct {
+	Pos lexer.Position
+
+	Names   []string  `"let" @Ident ("," @Ident)*`
+	Type    *Terminal `@@?`
+	Default *Expr     `( "=" @@ )?`
 }
 
 type Stmt struct {
-	Return *ReturnStmt `  @@`
-	Let    *LetStmt    `| @@`
-	Block  *Block      `| @@`
-	Func   *FuncDecl   `| @@`
-	If     *IfStmt     `| @@`
-	Switch *SwitchStmt `| @@`
+	Pos lexer.Position
+
+	Return    *ReturnStmt `  @@`
+	Go        *GoStmt     `| @@`
+	If        *IfStmt     `| @@`
+	Switch    *SwitchStmt `| @@`
+	Block     *Block      `| @@`
+	VarDecl   *VarDecl    `| @@`
+	FuncDecl  *FuncDecl   `| @@`
+	ClassDecl *ClassDecl  `| @@`
+	EnumDecl  *EnumDecl   `| @@`
 
 	// Must be last alternative.
 	Expression *Expr `| @@`
 }
 
 type Block struct {
+	Pos lexer.Position
+
 	Statements []*Stmt `"{" ( @@ ( ";" @@ )* )? ";"? "}"`
 }
 
+type GoStmt struct {
+	Pos lexer.Position
+
+	Call *Terminal `"go" @@`
+}
+
 type IfStmt struct {
+	Pos lexer.Position
+
 	Expression *Expr  `"if" @@`
 	Main       *Block `@@`
 	Else       *Block `( "else" @@ )?`
 }
 
 type SwitchStmt struct {
+	Pos lexer.Position
+
 	Target *Expr       `"switch" @@ "{"`
 	Cases  []*CaseStmt `@@* "}"`
 }
 
 type CaseStmt struct {
+	Pos lexer.Position
+
 	Case    *Expr   `( "case" @@`
 	Default bool    `  | @"default" ) ":"`
 	Body    []*Stmt `( @@ ( ";" @@ )* ";"? )?`
 }
 
 type ReturnStmt struct {
-	Value *Expr `"return" @@`
+	Pos lexer.Position
+
+	Value *Expr `"return" @@?`
 }
 
 type FuncDecl struct {
-	Name       string     `"fn" @Ident "("`
-	Parameters []*VarDecl `( @@ ( "," @@ )* )? ","? ")"`
-	Throws     bool       `@"throws"?`
-	Return     *Type      `@@?`
-	Body       *Block     `@@`
+	Pos lexer.Position
+
+	Name       string        `"fn" @Ident "("`
+	Parameters []*Parameters `( @@ ( "," @@ )* )? ","? ")"`
+	Throws     bool          `@"throws"?`
+	Return     *Terminal     `@@?`
+	Body       *Block        `@@`
 }
 
 func Parse(r io.Reader) (*AST, error) {

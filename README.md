@@ -37,20 +37,30 @@ go dump(a)      // Copy (asynchronous).
 a.x = 1.11      // Mutate.
 ```
 
-## Product types (structs)
+## Classes
 
 ```
-struct Vector {
-    let x, y, z float32
+pub class Vector() implements Stringer {
+    pub let x, y, z float32
 
-    fn length() float32 { // Pure.
+    // A default constructor is always provided for all public fields.
+    // In this case it would be equivalent to:
+    //
+    //     constructor(x, y, z float32)
+
+    pub fn length() float32 { // Pure.
         return Math.sqrt(x * x + y * y + z * z)
     }
 
-    fn add(other Vector) { // Impure.
+    pub fn add(other Vector) { // Impure.
         x += other.x
         y += other.y
         z += other.z
+    }
+
+    // "override" must be specified when implementing traits.
+    override pub fn string() string {
+        return "Vector(#{x}, #{y}, #{z})"
     }
 }
 ```
@@ -97,10 +107,19 @@ let a = {"hello"}        // Type inference.
 
 ## Type aliases
 
-```
-struct List<T> {}
+Creates an alias for an existing type, with its own set of methods etc.
 
-alias StringList List<string>
+
+```
+alias Number float {
+    // TODO: Constraints?
+    constraint self >= 1 && self <= 10
+
+    fn midpoint() float {
+        return this / 2.0
+    }
+}
+
 ```
 
 ## Channels
@@ -115,13 +134,30 @@ v.x = 2   // Mutate
 a <- v    // Copy
 ```
 
-## Interfaces
-
-Structural typing ala Go.
+## Classural typing?
 
 ```
 interface Stringer {
-    string(): string
+    fn string() string
+}
+```
+
+## Traits
+
+Static traits must be declared as implemented:
+
+```
+trait Pet {
+    // Method with a default implementation. Can still be overridden.
+    fn description() string {
+        return "no description"
+    }
+
+    // No implementation, must be overridden.
+    fn name()
+
+    // Fields without a default value must be provided by implementations.
+    let age int
 }
 ```
 
@@ -142,9 +178,64 @@ enum Optional<T> {
 
 let result = Result.value("hello world")
 
-match result {
+match (result) {
 value(value):
 error(error):
+}
+```
+
+## Pattern matching
+
+```
+let tuples = [("a", 123), ("b", 234)]
+
+for tuple in tuples {
+    match tuple {
+    case ("a", n):
+        println("a #{n}")
+
+    default:
+        println(tuple[0], tuple[1])
+    }
+}
+```
+
+```go
+type StringIntTuple struct {
+    A string
+    B int
+}
+var tuples = []StringIntTuple{
+    {A: "a", B: 123},
+    {A: "b", B: 234},
+}
+
+for _, tuple := range tuples {
+    if tuple.A == "a" {
+        n := tuple.B
+        fmt.Sprintf("a %d", n)
+    } else {
+        fmt.Println(tuple.A, tuple.B)
+    }
+}
+```
+
+## For loop
+
+```
+for value in array {
+}
+
+for (index, value) in array {
+}
+
+for key in map {
+}
+
+for (key, value) in map {
+}
+
+for value in set {
 }
 ```
 

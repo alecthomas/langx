@@ -23,35 +23,16 @@ func TestLexer(t *testing.T) {
 	require.NoError(t, err)
 	tokens, err := lexer.ConsumeAll(l)
 	require.NoError(t, err)
-	actual := []lexer.Token{}
+	actual := []string{}
 	for _, token := range tokens {
 		if token.Type == d.Symbols()["Whitespace"] {
 			continue
 		}
-		token.Pos = lexer.Position{}
-		token.Type = 0
-		actual = append(actual, token)
+		actual = append(actual, token.Value)
 	}
-	expected := []lexer.Token{
-		{Value: "fn"},
-		{Value: "foo"},
-		{Value: "("},
-		{Value: ")"},
-		{Value: "{"},
-		{Value: "if"},
-		{Value: "true"},
-		{Value: "{"},
-		{Value: "}"},
-		{Value: ";"},
-		{Value: "a"},
-		{Value: "="},
-		{Value: "1"},
-		{Value: "+"},
-		{Value: "2"},
-		{Value: ";"},
-		{Value: "}"},
-		{Value: ";"},
-		{},
+	expected := []string{
+		"fn", "foo", "(", ")", "{", "if", "true", "{", "}", ";", "a", "=",
+		"1", "+", "2", ";", "}", ";", "",
 	}
 	require.Equal(t, expected, actual)
 }
