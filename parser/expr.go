@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/participle/lexer"
 )
 
-//go:generate stringer -type Op
+//go:generate stringer -linecomment -type Op
 
 type Op int
 

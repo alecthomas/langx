@@ -1,6 +1,6 @@
 package types
 
-//go:generate stringer -type Kind
+//go:generate stringer -linecomment -type Kind
 
 type Kind int
 
