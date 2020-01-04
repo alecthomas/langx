@@ -11,7 +11,7 @@ All values are immutable. However to improve ergonomics any mutating operations 
 automatically perform a copy. In reality the implementation should avoid copies 
 wherever possible while maintaining the semantics of immutability.
 
-Each parameter has two potential tains:
+Each parameter has two potential taints:
 
 1. A mutation taint that states whether the function mutates the 
    parameter value.
