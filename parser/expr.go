@@ -8,53 +8,33 @@ import (
 	"github.com/alecthomas/participle/lexer"
 )
 
+//go:generate stringer -linecomment -type Op
+
 type Op int
 
 const (
-	// %=
-	OpModAsgn Op = iota
-	// >=
-	OpGe
-	// <=
-	OpLe
-	// &&
-	OpAnd
-	// ||
-	OpOr
-	// ==
-	OpEq
-	// !=
-	OpNe
-	// +=
-	OpAddAsgn
-	// -=
-	OpSubAsgn
-	// *=
-	OpMulAsgn
-	// /=
-	OpDivAsgn
-	// ^=
-	OpPowAsgn
-	// -
-	OpSub
-	// =
-	OpAsgn
-	// +
-	OpAdd
-	// *
-	OpMul
-	// /
-	OpDiv
-	// <
-	OpLt
-	// >
-	OpGt
-	// %
-	OpMod
-	// ^
-	OpPow
-	// !
-	OpNot
+	OpModAsgn Op = iota // %=
+	OpGe                // >=
+	OpLe                // <=
+	OpAnd               // &&
+	OpOr                // ||
+	OpEq                // ==
+	OpNe                // !=
+	OpAddAsgn           // +=
+	OpSubAsgn           // -=
+	OpMulAsgn           // *=
+	OpDivAsgn           // /=
+	OpPowAsgn           // ^=
+	OpSub               // -
+	OpAsgn              // =
+	OpAdd               // +
+	OpMul               // *
+	OpDiv               // /
+	OpLt                // <
+	OpGt                // >
+	OpMod               // %
+	OpPow               // ^
+	OpNot               // !
 )
 
 func (o Op) GoString() string {
@@ -103,57 +83,6 @@ func (o Op) GoString() string {
 		return "parser.OpPow"
 	case OpNot:
 		return "parser.OpNot"
-	default:
-		panic("??")
-	}
-}
-
-func (o Op) String() string {
-	switch o {
-	case OpModAsgn:
-		return "%="
-	case OpGe:
-		return ">="
-	case OpLe:
-		return "<="
-	case OpAnd:
-		return "&&"
-	case OpOr:
-		return "||"
-	case OpEq:
-		return "=="
-	case OpNe:
-		return "!="
-	case OpAddAsgn:
-		return "+="
-	case OpSubAsgn:
-		return "-="
-	case OpMulAsgn:
-		return "*="
-	case OpDivAsgn:
-		return "/="
-	case OpPowAsgn:
-		return "^="
-	case OpSub:
-		return "-"
-	case OpAsgn:
-		return "="
-	case OpAdd:
-		return "+"
-	case OpMul:
-		return "*"
-	case OpDiv:
-		return "/"
-	case OpLt:
-		return "<"
-	case OpGt:
-		return ">"
-	case OpMod:
-		return "%"
-	case OpPow:
-		return "^"
-	case OpNot:
-		return "!"
 	default:
 		panic("??")
 	}
