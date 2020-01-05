@@ -18,6 +18,7 @@ const (
 	KindTuple  // tuple
 	KindClass  // class
 	KindEnum   // enum
+	KindCase   // case
 	KindAlias  // alias
 )
 

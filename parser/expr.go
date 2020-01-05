@@ -249,14 +249,17 @@ func (u *Unary) String() string {
 type Terminal struct {
 	Pos lexer.Position
 
-	Tuple   []*Expr       `(   "(" @@ ( "," @@ )* ")" `
+	Tuple   []*Expr       `(   "(" @@ ( "," @@ )* ")"`
+	Literal *Literal      `  | @@`
 	Ident   string        `  | ( @Ident`
-	Class   *ClassLiteral `      @@? )`
-	Literal *Literal      `  | @@ )`
+	Class   *ClassLiteral `      @@? ) )`
 
-	Subscript *Expr     `( "[" @@ "]" )?`
-	Reference *Terminal `( "." @@ )?`
-	Call      *Call     `@@?`
+	Subscript *Expr     `(   "[" @@ "]"`
+	Reference *Terminal `  | "." @@`
+	Call      *Call     `  | @@ )?`
+}
+
+type Tuple struct {
 }
 
 func (t *Terminal) Describe() string {
@@ -313,7 +316,7 @@ type Literal struct {
 
 	Number *Number `  @Number`
 	Str    *string `| @String`
-	Bool   *bool   `| ( @"true" | "false" )`
+	Bool   *bool   `| @("true" | "false")`
 	// DictOrSet *DictOrSetLiteral `| @@`
 	// Array     *ArrayLiteral     `| @@`
 	// Class    *ClassLiteral    `| @@`

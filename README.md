@@ -134,12 +134,25 @@ v.x = 2   // Mutate
 a <- v    // Copy
 ```
 
-## Classural typing?
+## Structural typing?
 
 ```
 interface Stringer {
     fn string() string
 }
+```
+
+## Actors?
+
+```
+actor Owner {
+    fn feed(pet Pet) {
+    }
+}
+
+// Start Actor.
+let owner = Owner()
+owner.feed(Pet("Bob))
 ```
 
 ## Traits

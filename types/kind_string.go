@@ -20,12 +20,13 @@ func _() {
 	_ = x[KindTuple-9]
 	_ = x[KindClass-10]
 	_ = x[KindEnum-11]
-	_ = x[KindAlias-12]
+	_ = x[KindCase-12]
+	_ = x[KindAlias-13]
 }
 
-const _Kind_name = "nonetypefunctionnumberstringboolintfloatchantupleclassenumalias"
+const _Kind_name = "nonetypefunctionnumberstringboolintfloatchantupleclassenumcasealias"
 
-var _Kind_index = [...]uint8{0, 4, 8, 16, 22, 28, 32, 35, 40, 44, 49, 54, 58, 63}
+var _Kind_index = [...]uint8{0, 4, 8, 16, 22, 28, 32, 35, 40, 44, 49, 54, 58, 62, 67}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {

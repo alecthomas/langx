@@ -11,19 +11,14 @@ type Scope struct {
 	parent   *Scope
 	owner    types.Type
 	children []*Scope
-	symbols  map[string]types.Type
-}
-
-func makeScopeFromType(t types.Type) *Scope {
-	s := makeScope(nil, t)
-	return s
+	symbols  map[string]types.Reference
 }
 
 func makeScope(parent *Scope, owner types.Type) *Scope {
 	return &Scope{
 		owner:   owner,
 		parent:  parent,
-		symbols: map[string]types.Type{},
+		symbols: map[string]types.Reference{},
 	}
 }
 
@@ -43,22 +38,48 @@ func (s *Scope) Sub(owner types.Type) *Scope {
 	return scope
 }
 
-func (s *Scope) Children() []*Scope             { return s.children }
-func (s *Scope) Symbols() map[string]types.Type { return s.symbols }
-func (s *Scope) Resolve(ident string) types.Type {
-	if sym, ok := s.symbols[ident]; ok {
-		return sym
+func (s *Scope) Children() []*Scope { return s.children }
+func (s *Scope) Resolve(ident string) types.Reference {
+	if ref, ok := s.symbols[ident]; ok {
+		return ref
 	}
 	if s.parent != nil {
 		return s.parent.Resolve(ident)
 	}
 	return nil
 }
-func (s *Scope) Add(name string, symbol types.Type) error {
+func (s *Scope) Symbols() map[string]types.Reference { return s.symbols }
+func (s *Scope) ResolveType(ident string) types.Type {
+	if sym, ok := s.symbols[ident].(types.Type); ok {
+		return sym
+	}
+	if s.parent != nil {
+		return s.parent.ResolveType(ident)
+	}
+	return nil
+}
+func (s *Scope) ResolveValue(ident string) *types.Value {
+	if sym, ok := s.symbols[ident].(*types.Value); ok {
+		return sym
+	}
+	if s.parent != nil {
+		return s.parent.ResolveValue(ident)
+	}
+	return nil
+}
+func (s *Scope) AddType(name string, symbol types.Type) error {
 	_, ok := s.symbols[name]
 	if ok {
 		return errors.Errorf("%q redeclared", name)
 	}
 	s.symbols[name] = symbol
+	return nil
+}
+func (s *Scope) AddValue(name string, value *types.Value) error {
+	_, ok := s.symbols[name]
+	if ok {
+		return errors.Errorf("%q redeclared", name)
+	}
+	s.symbols[name] = value
 	return nil
 }

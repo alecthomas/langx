@@ -110,15 +110,19 @@ type EnumMember struct {
 
 	Modifiers Modifiers `@Modifier*`
 
-	Case   *CaseDecl `(  @@`
-	Method *FuncDecl ` | @@ )`
+	CaseDecl        *CaseDecl        `(  @@`
+	VarDecl         *VarDecl         ` | @@`
+	FuncDecl        *FuncDecl        ` | @@`
+	ClassDecl       *ClassDecl       ` | @@`
+	EnumDecl        *EnumDecl        ` | @@`
+	InitialiserDecl *InitialiserDecl ` | @@ )`
 }
 
 type CaseDecl struct {
 	Pos lexer.Position
 
-	Case *Type  `"case" @@`
-	Var  string `( "(" @Ident ")" )?`
+	Name string `"case" @Ident`
+	Type *Type  `( "(" @@ ")" )?`
 }
 
 type ClassDecl struct {
@@ -133,8 +137,19 @@ type ClassMember struct {
 
 	Modifiers Modifiers `@Modifier*`
 
-	Field  *VarDecl  `(  @@`
-	Method *FuncDecl ` | @@ )`
+	VarDecl         *VarDecl         `(  @@`
+	FuncDecl        *FuncDecl        ` | @@`
+	ClassDecl       *ClassDecl       ` | @@`
+	EnumDecl        *EnumDecl        ` | @@`
+	InitialiserDecl *InitialiserDecl ` | @@ )`
+}
+
+type InitialiserDecl struct {
+	Pos lexer.Position
+
+	Parameters []*Parameters `"init" "(" ( @@ ( "," @@ )* )? ","? ")"`
+	Throws     bool          `@"throws"?`
+	Body       *Block        `@@`
 }
 
 type Type struct {
@@ -161,7 +176,16 @@ type Parameters struct {
 type VarDecl struct {
 	Pos lexer.Position
 
-	Names   []string  `"let" @Ident ("," @Ident)*`
+	// let a, b, c int
+	// let a = 1, b = 2
+	// let a int = 1, b int = 2
+	Vars []*VarDeclAsgn `"let" @@ ( "," @@ )*`
+}
+
+type VarDeclAsgn struct {
+	Pos lexer.Position
+
+	Name    string    `@Ident`
 	Type    *Terminal `@@?`
 	Default *Expr     `( "=" @@ )?`
 }
@@ -186,7 +210,7 @@ type Stmt struct {
 type Block struct {
 	Pos lexer.Position
 
-	Statements []*Stmt `"{" ( @@ ( ";" @@ )* )? ";"? "}"`
+	Statements []*Stmt `"{" ( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
 type GoStmt struct {
@@ -198,15 +222,15 @@ type GoStmt struct {
 type IfStmt struct {
 	Pos lexer.Position
 
-	Expression *Expr  `"if" @@`
-	Main       *Block `@@`
-	Else       *Block `( "else" @@ )?`
+	Condition *Expr `"if" "(" @@ ")"`
+	Main      *Stmt `@@`
+	Else      *Stmt `( "else" @@ )?`
 }
 
 type SwitchStmt struct {
 	Pos lexer.Position
 
-	Target *Expr       `"switch" @@ "{"`
+	Target *Expr       `"switch" "(" @@ ")" "{"`
 	Cases  []*CaseStmt `@@* "}"`
 }
 
