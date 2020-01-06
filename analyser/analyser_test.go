@@ -169,6 +169,24 @@ func TestAnalyser(t *testing.T) {
 					}
 				}
 			`},
+		{name: "DeferredBodyAnalysis",
+			input: `
+			class A {
+				init() {
+					a = 1
+				}
+
+				fn f() {
+					a = 2
+				}
+			}
+
+			fn f() {
+				a = 3
+			}
+
+			let a = 0
+			`,},
 		// {name: "SwitchOnEnum",
 		// 	input: `
 		// 		enum Enum {

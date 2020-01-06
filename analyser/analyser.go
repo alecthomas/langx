@@ -32,7 +32,8 @@ func Analyse(ast *parser.AST) (*Program, error) {
 		ast:  ast,
 		root: makeScope(builtins, nil),
 	}
-	err := checkRoot(p.root, p.ast)
+	a := &analyser{}
+	err := a.checkRoot(p.root, p.ast)
 	return p, err
 }
 
@@ -41,31 +42,38 @@ type funcAndScope struct {
 	scope *Scope
 }
 
-func checkRoot(scope *Scope, ast *parser.AST) error {
+type analyser struct {
+	funcs []funcAndScope
+}
+
+func (a *analyser) deferFunc(fn *parser.Block, scope *Scope) {
+	a.funcs = append(a.funcs, funcAndScope{fn, scope})
+}
+
+func (a *analyser) checkRoot(scope *Scope, ast *parser.AST) error {
 	// TODO: Accumulate function bodies across all classes/enums and globals,
 	//  and do them all in one pass.
-	funcs := []funcAndScope{}
 	for _, decl := range ast.Declarations {
 		switch {
 		case decl.Var != nil:
-			if err := checkVarDecl(scope, decl.Var); err != nil {
+			if err := a.checkVarDecl(scope, decl.Var); err != nil {
 				return err
 			}
 
 		case decl.Func != nil:
-			funcScope, err := checkFuncDecl(scope, decl.Func)
+			funcScope, err := a.checkFuncDecl(scope, decl.Func)
 			if err != nil {
 				return err
 			}
-			funcs = append(funcs, funcAndScope{decl.Func.Body, funcScope})
+			a.deferFunc(decl.Func.Body, funcScope)
 
 		case decl.Class != nil:
-			if err := checkClassDecl(scope, decl.Class); err != nil {
+			if err := a.checkClassDecl(scope, decl.Class); err != nil {
 				return err
 			}
 
 		case decl.Enum != nil:
-			if err := checkEnumDecl(scope, decl.Enum); err != nil {
+			if err := a.checkEnumDecl(scope, decl.Enum); err != nil {
 				return err
 			}
 
@@ -73,19 +81,19 @@ func checkRoot(scope *Scope, ast *parser.AST) error {
 			panic("not implemented")
 		}
 	}
-	return checkFuncScopes(funcs)
+	return a.checkFuncScopes()
 }
 
-func checkFuncScopes(funcs []funcAndScope) error {
-	for _, fn := range funcs {
-		if err := checkBlock(fn.scope, fn.fn); err != nil {
+func (a *analyser) checkFuncScopes() error {
+	for _, fn := range a.funcs {
+		if err := a.checkBlock(fn.scope, fn.fn); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
+func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	// Add the enum to the parent scope.
 	enumt := &types.Enum{}
 	err := scope.AddType(enum.Name.Type, enumt)
@@ -100,50 +108,49 @@ func checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	}
 	// Create a sub-scope for all the fields.
 	enumScope = enumScope.Sub(nil)
-	funcScopes := []funcAndScope{}
 	for _, member := range enum.Members {
 		switch {
 		case member.CaseDecl != nil:
-			if err := resolveCaseDecl(enumScope, enumt, member.CaseDecl); err != nil {
+			if err := a.resolveCaseDecl(enumScope, enumt, member.CaseDecl); err != nil {
 				return err
 			}
 
 		case member.VarDecl != nil:
-			if err := checkVarDecl(enumScope, member.VarDecl); err != nil {
+			if err := a.checkVarDecl(enumScope, member.VarDecl); err != nil {
 				return err
 			}
 
 		case member.FuncDecl != nil:
-			funcScope, err := checkFuncDecl(enumScope, member.FuncDecl)
+			funcScope, err := a.checkFuncDecl(enumScope, member.FuncDecl)
 			if err != nil {
 				return err
 			}
-			funcScopes = append(funcScopes, funcAndScope{member.FuncDecl.Body, funcScope})
+			a.deferFunc(member.FuncDecl.Body, funcScope)
 
 		case member.EnumDecl != nil:
-			if err := checkEnumDecl(enumScope, member.EnumDecl); err != nil {
+			if err := a.checkEnumDecl(enumScope, member.EnumDecl); err != nil {
 				return err
 			}
 
 		case member.ClassDecl != nil:
-			if err := checkClassDecl(enumScope, member.ClassDecl); err != nil {
+			if err := a.checkClassDecl(enumScope, member.ClassDecl); err != nil {
 				return err
 			}
 
 		case member.InitialiserDecl != nil:
-			initScope, init, err := resolveInitialiserDecl(enumScope, member.InitialiserDecl)
+			initScope, init, err := a.resolveInitialiserDecl(enumScope, member.InitialiserDecl)
 			if err != nil {
 				return err
 			}
 			enumt.Init = init
-			funcScopes = append(funcScopes, funcAndScope{member.InitialiserDecl.Body, initScope})
+			a.deferFunc(member.InitialiserDecl.Body, initScope)
 		}
 	}
-	enumt.Flds = scopeToTypeFields(enumScope)
-	return checkFuncScopes(funcScopes)
+	enumt.Flds = a.scopeToTypeFields(enumScope)
+	return nil
 }
 
-func scopeToTypeFields(scope *Scope) []types.TypeField {
+func (a *analyser) scopeToTypeFields(scope *Scope) []types.TypeField {
 	symbols := scope.Symbols()
 	var out []types.TypeField
 	for name, sym := range symbols {
@@ -155,13 +162,13 @@ func scopeToTypeFields(scope *Scope) []types.TypeField {
 	return out
 }
 
-func resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.CaseDecl) error {
+func (a *analyser) resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.CaseDecl) error {
 	ctype := &types.Case{
 		Enum: enum,
 		Name: decl.Name,
 	}
 	if decl.Type != nil {
-		typ, err := resolveType(scope, decl.Type)
+		typ, err := a.resolveType(scope, decl.Type)
 		if err != nil {
 			return err
 		}
@@ -174,7 +181,7 @@ func resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.CaseDecl) erro
 	return nil
 }
 
-func resolveType(scope *Scope, cse *parser.Type) (types.Type, error) {
+func (a *analyser) resolveType(scope *Scope, cse *parser.Type) (types.Type, error) {
 	typ := scope.ResolveType(cse.Type)
 	if typ == nil {
 		return nil, participle.Errorf(cse.Pos, "unknown type %q", cse.Type)
@@ -182,7 +189,7 @@ func resolveType(scope *Scope, cse *parser.Type) (types.Type, error) {
 	return typ, nil
 }
 
-func checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
+func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 	clst := &types.Class{}
 	err := scope.AddType(class.Name.Type, clst)
 	if err != nil {
@@ -196,51 +203,50 @@ func checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 	}
 	// Create a sub-scope for all the fields.
 	classScope = classScope.Sub(nil)
-	funcScopes := []funcAndScope{}
 	for _, member := range class.Members {
 		switch {
 		case member.VarDecl != nil:
-			if err := checkVarDecl(classScope, member.VarDecl); err != nil {
+			if err := a.checkVarDecl(classScope, member.VarDecl); err != nil {
 				return err
 			}
 
 		case member.FuncDecl != nil:
-			funcScope, err := checkFuncDecl(classScope, member.FuncDecl)
+			funcScope, err := a.checkFuncDecl(classScope, member.FuncDecl)
 			if err != nil {
 				return err
 			}
-			funcScopes = append(funcScopes, funcAndScope{member.FuncDecl.Body, funcScope})
+			a.deferFunc(member.FuncDecl.Body, funcScope)
 
 		case member.EnumDecl != nil:
-			if err := checkEnumDecl(classScope, member.EnumDecl); err != nil {
+			if err := a.checkEnumDecl(classScope, member.EnumDecl); err != nil {
 				return err
 			}
 
 		case member.ClassDecl != nil:
-			if err := checkClassDecl(classScope, member.ClassDecl); err != nil {
+			if err := a.checkClassDecl(classScope, member.ClassDecl); err != nil {
 				return err
 			}
 
 		case member.InitialiserDecl != nil:
-			initScope, init, err := resolveInitialiserDecl(classScope, member.InitialiserDecl)
+			initScope, init, err := a.resolveInitialiserDecl(classScope, member.InitialiserDecl)
 			if err != nil {
 				return err
 			}
 			clst.Init = init
-			funcScopes = append(funcScopes, funcAndScope{member.InitialiserDecl.Body, initScope})
+			a.deferFunc(member.InitialiserDecl.Body, initScope)
 		}
 	}
-	clst.Flds = scopeToTypeFields(classScope)
-	return checkFuncScopes(funcScopes)
+	clst.Flds = a.scopeToTypeFields(classScope)
+	return nil
 }
 
-func resolveInitialiserDecl(scope *Scope, decl *parser.InitialiserDecl) (*Scope, *types.Function, error) {
-	fnt, err := makeFunction(scope, types.None, decl.Parameters)
+func (a *analyser) resolveInitialiserDecl(scope *Scope, decl *parser.InitialiserDecl) (*Scope, *types.Function, error) {
+	fnt, err := a.makeFunction(scope, types.None, decl.Parameters)
 	if err != nil {
 		return nil, nil, err
 	}
 	funcScope := scope.Sub(fnt)
-	err = addParametersToScope(funcScope, decl.Parameters)
+	err = a.addParametersToScope(funcScope, decl.Parameters)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,13 +257,13 @@ func resolveInitialiserDecl(scope *Scope, decl *parser.InitialiserDecl) (*Scope,
 //
 // We pre-declare all symbols in a first pass before checking the function bodies in a
 // second pass.
-func checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, error) {
+func (a *analyser) checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, error) {
 	var (
 		returnType types.Type
 		err        error
 	)
 	if fn.Return != nil {
-		returnType, err = resolveTerminalType(scope, fn.Return)
+		returnType, err = a.resolveTerminalType(scope, fn.Return)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +271,7 @@ func checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, error) {
 		returnType = types.None
 	}
 	// Construct function type.
-	fnt, err := makeFunction(scope, returnType, fn.Parameters)
+	fnt, err := a.makeFunction(scope, returnType, fn.Parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +284,7 @@ func checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, error) {
 	// Create scope and add parameters to it.
 	funcScope := scope.Sub(fnt)
 
-	err = addParametersToScope(funcScope, fn.Parameters)
+	err = a.addParametersToScope(funcScope, fn.Parameters)
 	if err != nil {
 		return nil, err
 	}
@@ -286,14 +292,14 @@ func checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, error) {
 	return funcScope, nil
 }
 
-func addParametersToScope(scope *Scope, parameters []*parser.Parameters) error {
+func (a *analyser) addParametersToScope(scope *Scope, parameters []*parser.Parameters) error {
 	// Add parameters to scope.
 	for _, param := range parameters {
-		typ, err := resolveTerminalType(scope.Parent(), param.Type)
+		typ, err := a.resolveTerminalType(scope.Parent(), param.Type)
 		if err != nil {
 			return err
 		}
-		err = declVars(param.Pos, scope, &types.Value{Typ: typ}, param.Names...)
+		err = a.declVars(param.Pos, scope, &types.Value{Typ: typ}, param.Names...)
 		if err != nil {
 			return err
 		}
@@ -301,10 +307,10 @@ func addParametersToScope(scope *Scope, parameters []*parser.Parameters) error {
 	return nil
 }
 
-func makeFunction(scope *Scope, returnType types.Type, parameters []*parser.Parameters) (*types.Function, error) {
+func (a *analyser) makeFunction(scope *Scope, returnType types.Type, parameters []*parser.Parameters) (*types.Function, error) {
 	fnt := &types.Function{ReturnType: returnType}
 	for _, param := range parameters {
-		typ, err := resolveTerminalType(scope, param.Type)
+		typ, err := a.resolveTerminalType(scope, param.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -315,27 +321,27 @@ func makeFunction(scope *Scope, returnType types.Type, parameters []*parser.Para
 	return fnt, nil
 }
 
-func findEnclosingFunction(scope *Scope) *types.Function {
+func (a *analyser) findEnclosingFunction(scope *Scope) *types.Function {
 	if scope == nil {
 		return nil
 	}
 	if f, ok := scope.Owner().(*types.Function); ok {
 		return f
 	}
-	return findEnclosingFunction(scope.Parent())
+	return a.findEnclosingFunction(scope.Parent())
 }
 
-func checkStatement(scope *Scope, stmt *parser.Stmt) error {
+func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 	if stmt == nil {
 		return nil
 	}
 	switch {
 	case stmt.Return != nil:
-		f := findEnclosingFunction(scope)
+		f := a.findEnclosingFunction(scope)
 		if f == nil {
 			return participle.Errorf(stmt.Return.Pos, "can't return from outside a function")
 		}
-		val, err := resolveExprValue(scope, stmt.Return.Value)
+		val, err := a.resolveExprValue(scope, stmt.Return.Value)
 		if err != nil {
 			return err
 		}
@@ -345,47 +351,47 @@ func checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		return nil
 
 	case stmt.VarDecl != nil:
-		return checkVarDecl(scope, stmt.VarDecl)
+		return a.checkVarDecl(scope, stmt.VarDecl)
 
 	case stmt.FuncDecl != nil:
-		funcScope, err := checkFuncDecl(scope, stmt.FuncDecl)
+		funcScope, err := a.checkFuncDecl(scope, stmt.FuncDecl)
 		if err != nil {
 			return err
 		}
-		return checkBlock(funcScope, stmt.FuncDecl.Body)
+		return a.checkBlock(funcScope, stmt.FuncDecl.Body)
 
 	case stmt.If != nil:
 		stmt := stmt.If
-		if err := checkBoolExpr(scope, stmt.Condition); err != nil {
+		if err := a.checkBoolExpr(scope, stmt.Condition); err != nil {
 			return err
 		}
-		if err := checkStatement(scope.Sub(nil), stmt.Main); err != nil {
+		if err := a.checkStatement(scope.Sub(nil), stmt.Main); err != nil {
 			return err
 		}
-		return checkStatement(scope.Sub(nil), stmt.Else)
+		return a.checkStatement(scope.Sub(nil), stmt.Else)
 
 	case stmt.Go != nil:
 		if stmt.Go.Call == nil {
 			return participle.Errorf(stmt.Go.Pos, "go requires a function call")
 		}
-		_, err := resolveTerminal(scope, stmt.Go.Call)
+		_, err := a.resolveTerminal(scope, stmt.Go.Call)
 		return err
 
 	case stmt.Switch != nil:
-		return checkSwitch(scope, stmt.Switch)
+		return a.checkSwitch(scope, stmt.Switch)
 
 	case stmt.Expression != nil:
-		_, err := resolveExpr(scope, stmt.Expression)
+		_, err := a.resolveExpr(scope, stmt.Expression)
 		return err
 
 	case stmt.Block != nil:
-		return checkBlock(scope.Sub(nil), stmt.Block)
+		return a.checkBlock(scope.Sub(nil), stmt.Block)
 	}
 	panic(stmt.Pos.String())
 }
 
-func checkSwitch(scope *Scope, stmt *parser.SwitchStmt) error {
-	target, err := resolveExprValue(scope, stmt.Target)
+func (a *analyser) checkSwitch(scope *Scope, stmt *parser.SwitchStmt) error {
+	target, err := a.resolveExprValue(scope, stmt.Target)
 	if err != nil {
 		return err
 	}
@@ -406,15 +412,15 @@ func checkSwitch(scope *Scope, stmt *parser.SwitchStmt) error {
 		// }
 
 	default:
-		return checkSwitchOnValue(scope, target, stmt)
+		return a.checkSwitchOnValue(scope, target, stmt)
 	}
 	return nil
 }
 
-func checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt) error {
+func (a *analyser) checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt) error {
 	for _, cse := range stmt.Cases {
 		if cse.Case != nil {
-			resolvedCase, err := resolveExpr(scope, cse.Case)
+			resolvedCase, err := a.resolveExpr(scope, cse.Case)
 			if err != nil {
 				return err
 			}
@@ -423,7 +429,7 @@ func checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt
 			}
 		}
 		for _, stmt := range cse.Body {
-			if err := checkStatement(scope, stmt); err != nil {
+			if err := a.checkStatement(scope, stmt); err != nil {
 				return err
 			}
 		}
@@ -431,7 +437,7 @@ func checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt
 	return nil
 }
 
-func casesForEnum(t types.Type) map[string]*types.Case {
+func (a *analyser) casesForEnum(t types.Type) map[string]*types.Case {
 	out := map[string]*types.Case{}
 	for _, f := range t.Fields() {
 		c, ok := f.Type.(*types.Case)
@@ -443,8 +449,8 @@ func casesForEnum(t types.Type) map[string]*types.Case {
 	return out
 }
 
-func checkBoolExpr(scope *Scope, cond *parser.Expr) error {
-	condition, err := resolveExprValue(scope, cond)
+func (a *analyser) checkBoolExpr(scope *Scope, cond *parser.Expr) error {
+	condition, err := a.resolveExprValue(scope, cond)
 	if err != nil {
 		return err
 	}
@@ -454,19 +460,19 @@ func checkBoolExpr(scope *Scope, cond *parser.Expr) error {
 	return nil
 }
 
-func checkBlock(scope *Scope, block *parser.Block) error {
+func (a *analyser) checkBlock(scope *Scope, block *parser.Block) error {
 	if block == nil {
 		return nil
 	}
 	for _, stmt := range block.Statements {
-		if err := checkStatement(scope, stmt); err != nil {
+		if err := a.checkStatement(scope, stmt); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
+func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 	var untyped []string
 	for _, decl := range varDecl.Vars {
 		untyped = append(untyped, decl.Name)
@@ -481,7 +487,7 @@ func checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 		)
 
 		if decl.Default != nil {
-			dfltValue, err := resolveExprValue(scope, decl.Default)
+			dfltValue, err := a.resolveExprValue(scope, decl.Default)
 			if err != nil {
 				return err
 			}
@@ -497,7 +503,7 @@ func checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			// Infer type from the default value.
 			typ = dfltTyp
 		} else {
-			typ, err = resolveTerminalType(scope, decl.Type)
+			typ, err = a.resolveTerminalType(scope, decl.Type)
 			if err != nil {
 				return err
 			}
@@ -505,7 +511,7 @@ func checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 				return participle.Errorf(decl.Default.Pos, "can't assign %s to %s", dfltTyp, typ)
 			}
 		}
-		err = declVars(varDecl.Pos, scope, &types.Value{Typ: typ}, untyped...)
+		err = a.declVars(varDecl.Pos, scope, &types.Value{Typ: typ}, untyped...)
 		if err != nil {
 			return err
 		}
@@ -517,8 +523,8 @@ func checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 	return nil
 }
 
-func resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Value, error) {
-	ref, err := resolveExpr(scope, expr)
+func (a *analyser) resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Value, error) {
+	ref, err := a.resolveExpr(scope, expr)
 	if err != nil {
 		return nil, err
 	}
@@ -537,8 +543,8 @@ func resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Value, error) {
 	}
 }
 
-func resolveExprType(scope *Scope, expr *parser.Expr) (types.Type, error) {
-	ref, err := resolveExpr(scope, expr)
+func (a *analyser) resolveExprType(scope *Scope, expr *parser.Expr) (types.Type, error) {
+	ref, err := a.resolveExpr(scope, expr)
 	if err != nil {
 		return nil, err
 	}
@@ -550,15 +556,15 @@ func resolveExprType(scope *Scope, expr *parser.Expr) (types.Type, error) {
 }
 
 // Check and resolve an expression to its type.
-func resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference, error) {
+func (a *analyser) resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference, error) {
 	if expr.Unary != nil {
-		return resolveUnary(scope, expr.Unary)
+		return a.resolveUnary(scope, expr.Unary)
 	}
-	lhs, err := resolveExprValue(scope, expr.Left)
+	lhs, err := a.resolveExprValue(scope, expr.Left)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := resolveExprValue(scope, expr.Right)
+	rhs, err := a.resolveExprValue(scope, expr.Right)
 	if err != nil {
 		return nil, err
 	}
@@ -577,19 +583,19 @@ func resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference, error) {
 	panic(expr.Pos.String())
 }
 
-func resolveUnary(s *Scope, unary *parser.Unary) (types.Reference, error) {
-	sym, err := resolveTerminal(s, unary.Terminal)
+func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (types.Reference, error) {
+	sym, err := a.resolveTerminal(s, unary.Terminal)
 	if err != nil {
 		return nil, err
 	}
 	if sym.Type().CanApply(unary.Op, types.None) {
 		return nil, participle.Errorf(unary.Pos, "! requires a boolean but got %s", sym.Kind())
 	}
-	return resolveTerminal(s, unary.Terminal)
+	return a.resolveTerminal(s, unary.Terminal)
 }
 
-func resolveTerminalType(scope *Scope, terminal *parser.Terminal) (types.Type, error) {
-	ref, err := resolveTerminal(scope, terminal)
+func (a *analyser) resolveTerminalType(scope *Scope, terminal *parser.Terminal) (types.Type, error) {
+	ref, err := a.resolveTerminal(scope, terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -600,8 +606,8 @@ func resolveTerminalType(scope *Scope, terminal *parser.Terminal) (types.Type, e
 	return val, nil
 }
 
-func resolveTerminalValue(scope *Scope, terminal *parser.Terminal) (*types.Value, error) {
-	ref, err := resolveTerminal(scope, terminal)
+func (a *analyser) resolveTerminalValue(scope *Scope, terminal *parser.Terminal) (*types.Value, error) {
+	ref, err := a.resolveTerminal(scope, terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -612,10 +618,10 @@ func resolveTerminalValue(scope *Scope, terminal *parser.Terminal) (*types.Value
 	return val, nil
 }
 
-func resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, error) {
+func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, error) {
 	switch {
 	case terminal.Literal != nil:
-		return resolveLiteral(terminal.Literal)
+		return a.resolveLiteral(terminal.Literal)
 
 	case terminal.Ident != "":
 		sym := scope.Resolve(terminal.Ident)
@@ -624,10 +630,10 @@ func resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, 
 		}
 		switch {
 		case terminal.Reference != nil:
-			return resolveField(scope, sym, terminal.Reference)
+			return a.resolveField(scope, sym, terminal.Reference)
 
 		case terminal.Call != nil:
-			return resolveCallLike(scope, sym, terminal)
+			return a.resolveCallLike(scope, sym, terminal)
 
 		case terminal.Subscript != nil:
 			panic(terminal.Subscript.Pos.String())
@@ -637,7 +643,7 @@ func resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, 
 	case terminal.Tuple != nil:
 		// Sub-expression.
 		if len(terminal.Tuple) == 1 {
-			return resolveExpr(scope, terminal.Tuple[0])
+			return a.resolveExpr(scope, terminal.Tuple[0])
 		}
 		return nil, participle.Errorf(terminal.Pos, "tuples are not supported yet")
 
@@ -647,7 +653,7 @@ func resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, 
 }
 
 // Resolve something that looks like a function call (function, case, class initialiser).
-func resolveCallLike(scope *Scope, ref types.Reference, terminal *parser.Terminal) (*types.Value, error) {
+func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, terminal *parser.Terminal) (*types.Value, error) {
 	switch ref := ref.(type) {
 	case *types.Case: // Case(Type)
 		if ref.Case == nil {
@@ -656,7 +662,7 @@ func resolveCallLike(scope *Scope, ref types.Reference, terminal *parser.Termina
 		// Synthesise case parameters.
 		// TODO: Add "Cases" to Enum?
 		parameters := []types.Parameter{{Type: ref.Case}}
-		_, err := resolveCallActual(scope, ref.Case, parameters, terminal.Call)
+		_, err := a.resolveCallActual(scope, ref.Case, parameters, terminal.Call)
 		if err != nil {
 			return nil, err
 		}
@@ -667,31 +673,31 @@ func resolveCallLike(scope *Scope, ref types.Reference, terminal *parser.Termina
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
-		return resolveCallActual(scope, ref, parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref, parameters, terminal.Call)
 
 	case *types.Enum:
 		var parameters []types.Parameter
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
-		return resolveCallActual(scope, ref, parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref, parameters, terminal.Call)
 
 	case *types.Function:
-		return resolveCallActual(scope, ref.ReturnType, ref.Parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref.ReturnType, ref.Parameters, terminal.Call)
 
 	default:
 		return nil, participle.Errorf(terminal.Call.Pos, "can't call %s", ref)
 	}
 }
 
-func resolveCallActual(scope *Scope, returnType types.Type, parameters []types.Parameter, call *parser.Call) (*types.Value, error) {
+func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parameters []types.Parameter, call *parser.Call) (*types.Value, error) {
 	if len(parameters) != len(call.Parameters) {
 		return nil, participle.Errorf(call.Pos,
 			"%d parameters provided for function that takes %d parameters",
 			len(call.Parameters), len(parameters))
 	}
 	for i, param := range call.Parameters {
-		value, err := resolveExprValue(scope, param)
+		value, err := a.resolveExprValue(scope, param)
 		if err != nil {
 			return nil, err
 		}
@@ -704,7 +710,7 @@ func resolveCallActual(scope *Scope, returnType types.Type, parameters []types.P
 	return &types.Value{Typ: returnType}, nil
 }
 
-func resolveField(scope *Scope, parent types.Reference, terminal *parser.Terminal) (types.Reference, error) {
+func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *parser.Terminal) (types.Reference, error) {
 	switch {
 	case terminal.Ident != "":
 		field := parent.FieldByName(terminal.Ident)
@@ -713,10 +719,10 @@ func resolveField(scope *Scope, parent types.Reference, terminal *parser.Termina
 		}
 		switch {
 		case terminal.Reference != nil:
-			return resolveField(scope, field, terminal.Reference)
+			return a.resolveField(scope, field, terminal.Reference)
 
 		case terminal.Call != nil:
-			return resolveCallLike(scope, field, terminal)
+			return a.resolveCallLike(scope, field, terminal)
 
 		case terminal.Subscript != nil:
 			panic(terminal.Subscript.Pos.String())
@@ -728,7 +734,7 @@ func resolveField(scope *Scope, parent types.Reference, terminal *parser.Termina
 	}
 }
 
-func resolveLiteral(literal *parser.Literal) (types.Reference, error) {
+func (a *analyser) resolveLiteral(literal *parser.Literal) (types.Reference, error) {
 	switch {
 	case literal.Number != nil:
 		return &types.Value{Typ: types.Number}, nil
@@ -746,7 +752,7 @@ func resolveLiteral(literal *parser.Literal) (types.Reference, error) {
 }
 
 // Declare vars of typ in scope.
-func declVars(pos lexer.Position, scope *Scope, value *types.Value, names ...string) error {
+func (a *analyser) declVars(pos lexer.Position, scope *Scope, value *types.Value, names ...string) error {
 	if value == nil {
 		return participle.Errorf(pos, "no type provided (type inference not implemented yet)")
 	}
