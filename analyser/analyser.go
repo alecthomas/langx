@@ -32,9 +32,7 @@ func Analyse(ast *parser.AST) (*Program, error) {
 		ast:  ast,
 		root: makeScope(builtins, nil),
 	}
-	a := &analyser{}
-	err := a.checkRoot(p.root, p.ast)
-	return p, err
+	return p, new(analyser).checkRoot(p.root, p.ast)
 }
 
 type funcAndScope struct {

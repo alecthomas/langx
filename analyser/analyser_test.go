@@ -12,21 +12,26 @@ import (
 )
 
 func TestAnalyser(t *testing.T) {
-	type Refs map[string]types.Reference
+	type ref struct {
+		ref types.Reference
+		fix func(in types.Reference)
+	}
+	type refs map[string]ref
+
 	tests := []struct {
 		name  string
 		input string
 		fail  string
-		refs  Refs
+		refs  refs
 	}{
 		{name: "Call",
 			input: `
 				fn f() int { return 1 }
 				let v = f()
 				`,
-			refs: Refs{
-				"f": &types.Function{ReturnType: types.Int},
-				"v": &types.Value{Typ: types.Int},
+			refs: refs{
+				"f": {&types.Function{ReturnType: types.Int}, nil},
+				"v": {&types.Value{Typ: types.Int}, nil},
 			},
 		},
 		{name: "CallInvalidArgs",
@@ -45,11 +50,11 @@ func TestAnalyser(t *testing.T) {
 		},
 		{name: "VarDecl",
 			input: "let a, b = 1, c, d string",
-			refs: Refs{
-				"a": &types.Value{Typ: types.Int},
-				"b": &types.Value{Typ: types.Int},
-				"c": &types.Value{Typ: types.String},
-				"d": &types.Value{Typ: types.String},
+			refs: refs{
+				"a": {&types.Value{Typ: types.Int}, nil},
+				"b": {&types.Value{Typ: types.Int}, nil},
+				"c": {&types.Value{Typ: types.String}, nil},
+				"d": {&types.Value{Typ: types.String}, nil},
 			},
 		},
 		{name: "VarDeclUntyped",
@@ -62,8 +67,8 @@ func TestAnalyser(t *testing.T) {
 		},
 		{name: "Class",
 			input: `class Class {}`,
-			refs: Refs{
-				"Class": &types.Class{},
+			refs: refs{
+				"Class": {&types.Class{}, nil},
 			},
 		},
 		{name: "ClassCreationNoInit",
@@ -72,8 +77,8 @@ func TestAnalyser(t *testing.T) {
 		
 				let instance = Class()
 				`,
-			refs: Refs{
-				"instance": &types.Value{Typ: &types.Class{}},
+			refs: refs{
+				"instance": {&types.Value{Typ: &types.Class{}}, nil},
 			},
 		},
 		{name: "ClassCreationCustomInit",
@@ -85,18 +90,20 @@ func TestAnalyser(t *testing.T) {
 		
 				let instance = Class(1, 2)
 				`,
-			refs: Refs{
-				"instance": &types.Value{
-					Typ: &types.Class{
-						Init: &types.Function{
-							Parameters: []types.Parameter{
-								{Name: "a", Type: types.Int},
-								{Name: "b", Type: types.Int},
+			refs: refs{
+				"instance": {
+					&types.Value{
+						Typ: &types.Class{
+							Init: &types.Function{
+								Parameters: []types.Parameter{
+									{Name: "a", Type: types.Int},
+									{Name: "b", Type: types.Int},
+								},
+								ReturnType: types.None,
 							},
-							ReturnType: types.None,
 						},
 					},
-				},
+					nil},
 			},
 		},
 		{name: "ClassFields",
@@ -107,9 +114,9 @@ func TestAnalyser(t *testing.T) {
 						}
 					}
 				`,
-			refs: Refs{
-				"Class.field":  types.Int,
-				"Class.method": &types.Function{ReturnType: types.None},
+			refs: refs{
+				"Class.field":  {types.Int, nil},
+				"Class.method": {&types.Function{ReturnType: types.None}, nil},
 			},
 		},
 		{name: "EnumFields",
@@ -122,11 +129,11 @@ func TestAnalyser(t *testing.T) {
 						fn method() {}
 					}
 				`,
-			refs: Refs{
-				"Enum.field":  types.Int,
-				"Enum.method": &types.Function{ReturnType: types.None},
-				"Enum.None":   &types.Case{Name: "None"},
-				"Enum.Int":    &types.Case{Name: "Int", Case: types.Int},
+			refs: refs{
+				"Enum.field":  {types.Int, nil},
+				"Enum.method": {&types.Function{ReturnType: types.None}, nil},
+				"Enum.None":   {&types.Case{Name: "None"}, normaliseCase},
+				"Enum.Int":    {&types.Case{Name: "Int", Case: types.Int}, normaliseCase},
 			},
 		},
 		{name: "EnumCreation",
@@ -139,9 +146,9 @@ func TestAnalyser(t *testing.T) {
 				let none = Enum.None
 				let value = Enum.Int(1)
 			`,
-			refs: Refs{
-				"none":  &types.Value{Typ: &types.Case{Name: "None"}},
-				"value": &types.Value{Typ: &types.Case{Name: "Int", Case: types.Int}},
+			refs: refs{
+				"none":  {&types.Value{Typ: &types.Case{Name: "None"}}, normaliseCaseValue},
+				"value": {&types.Value{Typ: &types.Case{Name: "Int", Case: types.Int}}, normaliseCaseValue},
 			},
 		},
 		{name: "SwitchOnValue",
@@ -155,6 +162,34 @@ func TestAnalyser(t *testing.T) {
 				}
 			`,
 		},
+		{name: "SwitchOnValueInvalidCaseType",
+			input: `
+				fn f() {
+					let a = 1
+					switch (a) {
+					case "one":
+					case 2:
+					}
+				}
+			`,
+			fail: "5:11: can't select case of type string value from int",
+		},
+		// {name: "SwitchOnEnum",
+		// 	input: `
+		// 		enum Enum {
+		// 			case None
+		// 			case Int(int)
+		// 		}
+		// 		fn f() {
+		// 			let a = Enum.Int(1)
+		//
+		// 			switch (a) {
+		// 			case None:
+		// 			case Int(n):
+		// 			}
+		// 		}
+		// 	`,
+		// },
 		{name: "Self",
 			input: `
 				class Class {
@@ -187,22 +222,6 @@ func TestAnalyser(t *testing.T) {
 
 			let a = 0
 			`,},
-		// {name: "SwitchOnEnum",
-		// 	input: `
-		// 		enum Enum {
-		// 			case None
-		// 			case Int(int)
-		// 		}
-		// 		fn f() {
-		// 			let a = Enum.Int(1)
-		//
-		// 			switch (a) {
-		// 			case None:
-		// 			case Int(n):
-		// 			}
-		// 		}
-		// 	`,
-		// },
 		{name: "GoCall",
 			input: `
 			fn f() {}
@@ -224,14 +243,26 @@ func TestAnalyser(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				if test.refs != nil {
-					for key, expected := range test.refs {
+					for key, ref := range test.refs {
+						expected := ref.ref
 						actual := resolve(program.root, key)
+						if ref.fix != nil {
+							ref.fix(actual)
+						}
 						require.Equal(t, expected, actual, "%s", repr.String(actual, repr.Indent("  ")))
 					}
 				}
 			}
 		})
 	}
+}
+
+func normaliseCase(in types.Reference) {
+	in.(*types.Case).Enum = nil
+}
+
+func normaliseCaseValue(in types.Reference) {
+	in.(*types.Value).Typ.(*types.Case).Enum = nil
 }
 
 func resolve(root *Scope, key string) types.Reference {
