@@ -423,7 +423,10 @@ func (a *analyser) checkSwitchOnEnum(scope *Scope, enum *types.Enum, stmt *parse
 			}
 			seen = map[string]bool{}
 		} else {
-			name, err := a.checkPatternMatch(blockScope, enum, cse.Case)
+			if cse.Case.ExprCase != nil {
+				return participle.Errorf(cse.Case.ExprCase.Pos, "expected .<case>")
+			}
+			name, err := a.checkPatternMatch(blockScope, enum, cse.Case.EnumCase)
 			if err != nil {
 				return err
 			}
@@ -444,56 +447,50 @@ func (a *analyser) checkSwitchOnEnum(scope *Scope, enum *types.Enum, stmt *parse
 	return nil
 }
 
-// Check syntax and semantics of pattern match, and add any pattern variables to the scope.
-func (a *analyser) checkPatternMatch(scope *Scope, enum *types.Enum, pattern *parser.Expr) (string, error) {
-	if pattern.Unary == nil || pattern.Unary.Terminal == nil || pattern.Unary.Terminal.Ident == "" {
-		return "", participle.Errorf(pattern.Pos, "expected a pattern")
-	}
-	term := pattern.Unary.Terminal
+// Check semantics of pattern match, and add any pattern variables to the scope.
+func (a *analyser) checkPatternMatch(scope *Scope, enum *types.Enum, pattern *parser.EnumCase) (string, error) {
 	var selected *types.Case
 	for _, cse := range enum.Cases() {
-		if term.Ident == cse.Name {
+		if pattern.Case == cse.Name {
 			selected = cse
 			break
 		}
 	}
 	if selected == nil {
-		return "", participle.Errorf(term.Pos, "invalid enum case %q", term.Ident)
-	}
-	if selected.Case == nil && term.Call != nil {
-		return "", participle.Errorf(term.Pos, "case %q does not have a type to apply", selected.Name)
-	}
-	if selected.Case != nil && term.Call == nil {
-		return "", participle.Errorf(term.Pos, "case %q requires a variable to apply to", selected.Name)
+		return "", participle.Errorf(pattern.Pos, "invalid enum case %q", pattern.Case)
 	}
 	if selected.Case == nil {
+		if pattern.Var != "" {
+			return "", participle.Errorf(pattern.Pos, "case %q does not have a type to apply", selected.Name)
+		}
 		return selected.Name, nil
 	}
 
+	if pattern.Var == "" {
+		return "", participle.Errorf(pattern.Pos, "typed enum case %q requires a variable", selected.Name)
+	}
+
 	// Case has an associated type.
-	if len(term.Call.Parameters) != 1 {
-		return "", participle.Errorf(term.Call.Pos, "expected exactly one case value to apply to")
-	}
-	param := term.Call.Parameters[0]
-	if param.Unary == nil || param.Unary.Terminal == nil || pattern.Unary.Terminal.Ident == "" {
-		return "", participle.Errorf(param.Pos, "expected a variable name")
-	}
-	err := scope.AddValue(param.Unary.Terminal.Ident, &types.Value{Typ: selected.Case})
+	err := scope.AddValue(pattern.Var, &types.Value{Typ: selected.Case})
 	if err != nil {
-		return "", participle.AnnotateError(param.Pos, err)
+		return "", participle.AnnotateError(pattern.Pos, err)
 	}
 	return selected.Name, nil
 }
 
 func (a *analyser) checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt) error {
 	for _, cse := range stmt.Cases {
+		// Non-default case.
 		if cse.Case != nil {
-			resolvedCase, err := a.resolveExpr(scope, cse.Case)
+			if cse.Case.EnumCase != nil {
+				return participle.Errorf(cse.Case.EnumCase.Pos, "unexpected enum case")
+			}
+			resolvedCase, err := a.resolveExpr(scope, cse.Case.ExprCase)
 			if err != nil {
 				return err
 			}
 			if !resolvedCase.Type().CoercibleTo(target.Type()) {
-				return participle.Errorf(cse.Case.Pos, "can't select case of type %s from %s", resolvedCase, target)
+				return participle.Errorf(cse.Case.ExprCase.Pos, "can't select case of type %s from %s", resolvedCase, target)
 			}
 		}
 		for _, stmt := range cse.Body {

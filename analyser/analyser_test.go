@@ -185,8 +185,8 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int(1)
 		
 					switch (a) {
-					case None:
-					case Int(n):
+					case .None:
+					case .Int(n):
 						g = n
 					}
 				}
@@ -218,7 +218,7 @@ func TestAnalyser(t *testing.T) {
 					let a Enum = Enum.Int(1)
 		
 					switch (a) {
-					case Int(n):
+					case .Int(n):
 						g = n
 					default:
 					}
@@ -238,7 +238,7 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int(1)
 		
 					switch (a) {
-					case None:
+					case .None:
 					}
 				}
 			`,
@@ -255,7 +255,7 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int(1)
 		
 					switch (a) {
-					case Unknown:
+					case .Unknown:
 					}
 				}
 			`,
@@ -271,11 +271,11 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int(1)
 		
 					switch (a) {
-					case Int:
+					case .Int:
 					}
 				}
 			`,
-			fail: `10:11: case "Int" requires a variable to apply to`,
+			fail: `10:11: typed enum case "Int" requires a variable`,
 		},
 		{name: "SwitchOnEnumNoTypeExpected",
 			input: `
@@ -287,13 +287,13 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int
 		
 					switch (a) {
-					case Int(n):
+					case .Int(n):
 					}
 				}
 			`,
 			fail: `10:11: case "Int" does not have a type to apply`,
 		},
-		{name: "SwitchOnEnumNoTypeExpected",
+		{name: "SwitchOnEnumExtraParameter",
 			input: `
 				enum Enum {
 					case Int(int)
@@ -303,11 +303,11 @@ func TestAnalyser(t *testing.T) {
 					let a = Enum.Int(1)
 		
 					switch (a) {
-					case Int(n, m):
+					case .Int(n, m):
 					}
 				}
 			`,
-			fail: `10:14: expected exactly one case value to apply to`,
+			fail: `10:17: unexpected token "," (expected ")")`,
 		},
 		{name: "Self",
 			input: `
@@ -355,7 +355,14 @@ func TestAnalyser(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ast, err := parser.ParseString(test.input + "\n")
-			require.NoError(t, err)
+			if err != nil {
+				if test.fail == "" {
+					require.NoError(t, err)
+				} else {
+					require.EqualError(t, err, test.fail)
+				}
+				return
+			}
 			program, err := Analyse(ast)
 			if test.fail != "" {
 				require.EqualError(t, err, test.fail)

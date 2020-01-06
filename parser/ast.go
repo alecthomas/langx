@@ -237,9 +237,23 @@ type SwitchStmt struct {
 type CaseStmt struct {
 	Pos lexer.Position
 
-	Default bool    `(   @"default"`
-	Case    *Expr   `  | "case" @@ ) ":"`
-	Body    []*Stmt `( @@ ( ";" @@ )* ";"? )?`
+	Default bool        `( @"default"`
+	Case    *CaseSelect `  | "case" @@ ) ":"`
+	Body    []*Stmt     `( @@ ( ";" @@ )* ";"? )?`
+}
+
+type CaseSelect struct {
+	Pos lexer.Position
+
+	EnumCase *EnumCase `  @@`
+	ExprCase *Expr     `| @@`
+}
+
+type EnumCase struct {
+	Pos lexer.Position
+
+	Case string `"." @Ident`
+	Var  string `( "(" @Ident ")" )?`
 }
 
 type ReturnStmt struct {

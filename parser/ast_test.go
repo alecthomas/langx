@@ -61,10 +61,10 @@ fn test() {
 	let result = Result.value("hello world")
 
 	switch (result) {
-	case value(v):
+	case .value(v):
 		println(v)
 
-	case error(e):
+	case .error(e):
 		panic(e)
 	}
 }
