@@ -160,9 +160,14 @@ type Enum struct {
 
 var _ Type = &Enum{}
 
-func (e *Enum) Type() Type                      { return e }
-func (e *Enum) Kind() Kind                      { return KindEnum }
-func (e *Enum) CoercibleTo(other Type) bool     { return other == e }
+func (e *Enum) Type() Type { return e }
+func (e *Enum) Kind() Kind { return KindEnum }
+func (e *Enum) CoercibleTo(other Type) bool {
+	if cse, ok := other.(*Case); ok {
+		return cse.Enum == e
+	}
+	return other == e
+}
 func (e *Enum) CanApply(op Op, other Type) bool { return false }
 func (e *Enum) Fields() []TypeField             { return e.Flds }
 func (e *Enum) FieldByName(name string) Reference {
@@ -174,6 +179,16 @@ func (e *Enum) FieldByName(name string) Reference {
 	return nil
 }
 func (e *Enum) String() string { return "enum" }
+
+func (e *Enum) Cases() []*Case {
+	cases := []*Case{}
+	for _, fld := range e.Flds {
+		if cse, ok := fld.Type.(*Case); ok {
+			cases = append(cases, cse)
+		}
+	}
+	return cases
+}
 
 // MakeConcrete maps "t" to a concrete Type if it is a compile-time only type.
 func MakeConcrete(t Type) (Type, error) {

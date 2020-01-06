@@ -16,7 +16,7 @@ var (
 		whitespace = [\r\t ]+
 	
 		Modifier = \b(pub|override)\b
-		Keyword = \b(switch|case|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
+		Keyword = \b(switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
@@ -237,8 +237,8 @@ type SwitchStmt struct {
 type CaseStmt struct {
 	Pos lexer.Position
 
-	Case    *Expr   `( "case" @@`
-	Default bool    `  | @"default" ) ":"`
+	Default bool    `(   @"default"`
+	Case    *Expr   `  | "case" @@ ) ":"`
 	Body    []*Stmt `( @@ ( ";" @@ )* ";"? )?`
 }
 

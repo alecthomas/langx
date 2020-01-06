@@ -2,6 +2,8 @@
 package analyser
 
 import (
+	"strings"
+
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
 	"github.com/alecthomas/repr"
@@ -394,25 +396,93 @@ func (a *analyser) checkSwitch(scope *Scope, stmt *parser.SwitchStmt) error {
 		return err
 	}
 	switch target := target.Type().(type) {
+	case *types.Enum:
+		return a.checkSwitchOnEnum(scope, target, stmt)
+
 	case *types.Case:
-		panic("??")
-		// defaulted := false
-		// seen := map[string]*types.Enum{}
-		// cases := casesForEnum(target.Enum)
-		// for _, cse := range stmt.Cases {
-		// 	if cse.Default {
-		// 		if defaulted {
-		// 			return participle.Errorf(cse.Pos, "duplicate default case")
-		// 		}
-		// 		defaulted = true
-		// 	} else {
-		// 	}
-		// }
+		return a.checkSwitchOnEnum(scope, target.Enum, stmt)
 
 	default:
 		return a.checkSwitchOnValue(scope, target, stmt)
 	}
+}
+
+func (a *analyser) checkSwitchOnEnum(scope *Scope, enum *types.Enum, stmt *parser.SwitchStmt) error {
+	// Resolve cases and patterns.
+	// TODO: Check for an exhaustive match.
+	cases := enum.Cases()
+	seen := make(map[string]bool, len(cases))
+	for _, cse := range cases {
+		seen[cse.Name] = true
+	}
+	for _, cse := range stmt.Cases {
+		blockScope := scope.Sub(nil)
+		if cse.Default {
+			if len(seen) == 0 {
+				return participle.Errorf(cse.Pos, "cases already exhausted, default is redundant")
+			}
+			seen = map[string]bool{}
+		} else {
+			name, err := a.checkPatternMatch(blockScope, enum, cse.Case)
+			if err != nil {
+				return err
+			}
+			delete(seen, name)
+		}
+		err := a.checkStatements(blockScope, cse.Body)
+		if err != nil {
+			return err
+		}
+	}
+	if len(seen) != 0 {
+		caseStrings := []string{}
+		for cse := range seen {
+			caseStrings = append(caseStrings, cse)
+		}
+		return participle.Errorf(stmt.Pos, "cases not matched: %s", strings.Join(caseStrings, ", "))
+	}
 	return nil
+}
+
+// Check syntax and semantics of pattern match, and add any pattern variables to the scope.
+func (a *analyser) checkPatternMatch(scope *Scope, enum *types.Enum, pattern *parser.Expr) (string, error) {
+	if pattern.Unary == nil || pattern.Unary.Terminal == nil || pattern.Unary.Terminal.Ident == "" {
+		return "", participle.Errorf(pattern.Pos, "expected a pattern")
+	}
+	term := pattern.Unary.Terminal
+	var selected *types.Case
+	for _, cse := range enum.Cases() {
+		if term.Ident == cse.Name {
+			selected = cse
+			break
+		}
+	}
+	if selected == nil {
+		return "", participle.Errorf(term.Pos, "invalid enum case %q", term.Ident)
+	}
+	if selected.Case == nil && term.Call != nil {
+		return "", participle.Errorf(term.Pos, "case %q does not have a type to apply", selected.Name)
+	}
+	if selected.Case != nil && term.Call == nil {
+		return "", participle.Errorf(term.Pos, "case %q requires a variable to apply to", selected.Name)
+	}
+	if selected.Case == nil {
+		return selected.Name, nil
+	}
+
+	// Case has an associated type.
+	if len(term.Call.Parameters) != 1 {
+		return "", participle.Errorf(term.Call.Pos, "expected exactly one case value to apply to")
+	}
+	param := term.Call.Parameters[0]
+	if param.Unary == nil || param.Unary.Terminal == nil || pattern.Unary.Terminal.Ident == "" {
+		return "", participle.Errorf(param.Pos, "expected a variable name")
+	}
+	err := scope.AddValue(param.Unary.Terminal.Ident, &types.Value{Typ: selected.Case})
+	if err != nil {
+		return "", participle.AnnotateError(param.Pos, err)
+	}
+	return selected.Name, nil
 }
 
 func (a *analyser) checkSwitchOnValue(scope *Scope, target types.Type, stmt *parser.SwitchStmt) error {
@@ -462,7 +532,12 @@ func (a *analyser) checkBlock(scope *Scope, block *parser.Block) error {
 	if block == nil {
 		return nil
 	}
-	for _, stmt := range block.Statements {
+	statements := block.Statements
+	return a.checkStatements(scope, statements)
+}
+
+func (a *analyser) checkStatements(scope *Scope, statements []*parser.Stmt) error {
+	for _, stmt := range statements {
 		if err := a.checkStatement(scope, stmt); err != nil {
 			return err
 		}
@@ -505,7 +580,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			if err != nil {
 				return err
 			}
-			if dfltTyp != nil && !typ.CanApply(parser.OpAsgn, dfltTyp) {
+			if dfltTyp != nil && !typ.CoercibleTo(dfltTyp) {
 				return participle.Errorf(decl.Default.Pos, "can't assign %s to %s", dfltTyp, typ)
 			}
 		}
@@ -658,7 +733,6 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, terminal *
 			return nil, participle.Errorf(terminal.Call.Pos, "untyped case %q should not be called", terminal.Ident)
 		}
 		// Synthesise case parameters.
-		// TODO: Add "Cases" to Enum?
 		parameters := []types.Parameter{{Type: ref.Case}}
 		_, err := a.resolveCallActual(scope, ref.Case, parameters, terminal.Call)
 		if err != nil {

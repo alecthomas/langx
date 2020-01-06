@@ -174,22 +174,141 @@ func TestAnalyser(t *testing.T) {
 			`,
 			fail: "5:11: can't select case of type string value from int",
 		},
-		// {name: "SwitchOnEnum",
-		// 	input: `
-		// 		enum Enum {
-		// 			case None
-		// 			case Int(int)
-		// 		}
-		// 		fn f() {
-		// 			let a = Enum.Int(1)
-		//
-		// 			switch (a) {
-		// 			case None:
-		// 			case Int(n):
-		// 			}
-		// 		}
-		// 	`,
-		// },
+		{name: "SwitchOnEnum",
+			input: `
+				enum Enum {
+					case None
+					case Int(int)
+				}
+		
+				fn f() {
+					let a = Enum.Int(1)
+		
+					switch (a) {
+					case None:
+					case Int(n):
+						g = n
+					}
+				}
+		
+				let g = 1
+			`,
+		},
+		{name: "AssignCaseToEnum",
+			input: `
+				enum Enum {
+				case None
+				case Int(int)
+				}
+		
+				fn f() {
+					let a Enum = Enum.None
+					let b Enum = Enum.Int(1)
+				}
+			`,
+		},
+		{name: "SwitchOnEnumDefault",
+			input: `
+				enum Enum {
+					case None
+					case Int(int)
+				}
+		
+				fn f() {
+					let a Enum = Enum.Int(1)
+		
+					switch (a) {
+					case Int(n):
+						g = n
+					default:
+					}
+				}
+		
+				let g = 1
+			`,
+		},
+		{name: "SwitchNotExhaustive",
+			input: `
+				enum Enum {
+					case None
+					case Int(int)
+				}
+		
+				fn f() {
+					let a = Enum.Int(1)
+		
+					switch (a) {
+					case None:
+					}
+				}
+			`,
+			fail: `10:6: cases not matched: Int`,
+		},
+		{name: "SwitchOnEnumUnknownCase",
+			input: `
+				enum Enum {
+					case None
+					case Int(int)
+				}
+		
+				fn f() {
+					let a = Enum.Int(1)
+		
+					switch (a) {
+					case Unknown:
+					}
+				}
+			`,
+			fail: `11:11: invalid enum case "Unknown"`,
+		},
+		{name: "SwitchOnEnumNoTypeProvided",
+			input: `
+				enum Enum {
+					case Int(int)
+				}
+		
+				fn f() {
+					let a = Enum.Int(1)
+		
+					switch (a) {
+					case Int:
+					}
+				}
+			`,
+			fail: `10:11: case "Int" requires a variable to apply to`,
+		},
+		{name: "SwitchOnEnumNoTypeExpected",
+			input: `
+				enum Enum {
+					case Int
+				}
+		
+				fn f() {
+					let a = Enum.Int
+		
+					switch (a) {
+					case Int(n):
+					}
+				}
+			`,
+			fail: `10:11: case "Int" does not have a type to apply`,
+		},
+		{name: "SwitchOnEnumNoTypeExpected",
+			input: `
+				enum Enum {
+					case Int(int)
+				}
+		
+				fn f() {
+					let a = Enum.Int(1)
+		
+					switch (a) {
+					case Int(n, m):
+					}
+				}
+			`,
+			fail: `10:14: expected exactly one case value to apply to`,
+		},
 		{name: "Self",
 			input: `
 				class Class {
