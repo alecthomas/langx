@@ -21,7 +21,7 @@ var (
 		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
 		Newline = \n
-		Operator = %=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!]
+		Operator = ->|%=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!]
 		Punct = []` + "`" + `~[()@#${}:;?.,]
 	`))
 	parser = participle.MustBuild(&AST{},
@@ -101,7 +101,7 @@ type ImportDecl struct {
 type EnumDecl struct {
 	Pos lexer.Position
 
-	Name    *Type         `"enum" @@ "{"`
+	Type    *Type         `"enum" @@ "{"`
 	Members []*EnumMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
@@ -128,7 +128,7 @@ type CaseDecl struct {
 type ClassDecl struct {
 	Pos lexer.Position
 
-	Name    *Type          `"class" @@ "{"`
+	Type    *Type          `"class" @@ "{"`
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
@@ -170,7 +170,7 @@ type Parameters struct {
 	Pos lexer.Position
 
 	Names []string  `@Ident ("," @Ident)*`
-	Type  *Terminal `@@`
+	Type  *Terminal `":" @@`
 }
 
 type VarDecl struct {
@@ -186,7 +186,7 @@ type VarDeclAsgn struct {
 	Pos lexer.Position
 
 	Name    string    `@Ident`
-	Type    *Terminal `@@?`
+	Type    *Terminal `( ":" @@ )?`
 	Default *Expr     `( "=" @@ )?`
 }
 
@@ -268,7 +268,7 @@ type FuncDecl struct {
 	Name       string        `"fn" @Ident "("`
 	Parameters []*Parameters `( @@ ( "," @@ )* )? ","? ")"`
 	Throws     bool          `@"throws"?`
-	Return     *Terminal     `@@?`
+	Return     *Terminal     `( ":" @@ )?`
 	Body       *Block        `@@`
 }
 

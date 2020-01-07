@@ -35,6 +35,7 @@ const (
 	OpMod               // %
 	OpPow               // ^
 	OpNot               // !
+	OpSend              // ->
 )
 
 func (o Op) GoString() string {
@@ -83,6 +84,8 @@ func (o Op) GoString() string {
 		return "parser.OpPow"
 	case OpNot:
 		return "parser.OpNot"
+	case OpSend:
+		return "parser.OpSend"
 	default:
 		panic("??")
 	}
@@ -249,17 +252,13 @@ func (u *Unary) String() string {
 type Terminal struct {
 	Pos lexer.Position
 
-	Tuple   []*Expr       `(   "(" @@ ( "," @@ )* ")"`
-	Literal *Literal      `  | @@`
-	Ident   string        `  | ( @Ident`
-	Class   *ClassLiteral `      @@? ) )`
+	Tuple   []*Expr  `(   "(" @@ ( "," @@ )* ")"`
+	Literal *Literal `  | @@`
+	Ident   string   `  | @Ident )`
 
 	Subscript *Expr     `(   "[" @@ "]"`
 	Reference *Terminal `  | "." @@`
 	Call      *Call     `  | @@ )?`
-}
-
-type Tuple struct {
 }
 
 func (t *Terminal) Describe() string {
@@ -267,9 +266,6 @@ func (t *Terminal) Describe() string {
 	switch {
 	case t.Tuple != nil:
 		description = "tuple/subexpression"
-
-	case t.Class != nil:
-		description = fmt.Sprintf("struct literal %q", t.Ident)
 
 	case t.Ident != "":
 		description = fmt.Sprintf("reference to %q", t.Ident)
@@ -314,12 +310,11 @@ func (n *Number) Capture(values []string) error {
 type Literal struct {
 	Pos lexer.Position
 
-	Number *Number `  @Number`
-	Str    *string `| @String`
-	Bool   *bool   `| @("true" | "false")`
-	// DictOrSet *DictOrSetLiteral `| @@`
-	// Array     *ArrayLiteral     `| @@`
-	// Class    *ClassLiteral    `| @@`
+	Number    *Number           `  @Number`
+	Str       *string           `| @String`
+	Bool      *bool             `| @("true" | "false")`
+	DictOrSet *DictOrSetLiteral `| @@`
+	Array     *ArrayLiteral     `| @@`
 }
 
 func (l *Literal) Describe() string {
@@ -333,14 +328,14 @@ func (l *Literal) Describe() string {
 	case l.Bool != nil:
 		return "bool"
 
-	// case l.DictOrSet != nil:
-	// 	return "dict or set"
-	//
-	// case l.Array != nil:
-	// 	return "array"
-	//
-	// case l.Class != nil:
-	// 	return "struct"
+	case l.DictOrSet != nil:
+		if l.DictOrSet.Entries[0].Value != nil {
+			return "dict"
+		}
+		return "set"
+
+	case l.Array != nil:
+		return "array"
 
 	default:
 		panic("??")

@@ -1,13 +1,7 @@
 github.com/alecthomas/go-thrift v0.0.0-20170109061633-7914173639b2/go.mod h1:CxCgO+NdpMdi9SsTlGbc0W+/UNxO3I0AabOEJZ3w61w=
 github.com/alecthomas/kong v0.2.1/go.mod h1:+inYUSluD+p4L8KdviBSgzcqEjUQOfC5fQDRFuc36lI=
-github.com/alecthomas/participle v0.3.1-0.20191211063938-eb2adb3d223c h1:1AamBcB0y22liYUPa72BZmWhgG0eL2bNuVOYPAJQUNA=
-github.com/alecthomas/participle v0.3.1-0.20191211063938-eb2adb3d223c/go.mod h1:Au7xkQ7RXeuygsTJHv1fA3G+BTSJXLbLQMr71mpeWYg=
-github.com/alecthomas/participle v0.4.0 h1:HmAxLk9S6xyFvRRcw+bVgTKfjrQHZYQbV9svB5bhRj4=
-github.com/alecthomas/participle v0.4.0/go.mod h1:T8u4bQOSMwrkTWOSyt8/jSFPEnRtd0FKFMjVfYBlqPs=
-github.com/alecthomas/participle v0.4.1 h1:P2PJWzwrSpuCWXKnzqvw0b0phSfH1kJo4p2HvLynVsI=
-github.com/alecthomas/participle v0.4.1/go.mod h1:T8u4bQOSMwrkTWOSyt8/jSFPEnRtd0FKFMjVfYBlqPs=
-github.com/alecthomas/participle v0.4.2-0.20200105051618-88d75874673e h1:RCnP3JURE2TL604aaA8y+nhBPtihXb2Mx1ZejdpI+Cw=
-github.com/alecthomas/participle v0.4.2-0.20200105051618-88d75874673e/go.mod h1:T8u4bQOSMwrkTWOSyt8/jSFPEnRtd0FKFMjVfYBlqPs=
+github.com/alecthomas/participle v0.4.2-0.20200107002021-f4a898cf4f8a h1:nha4nGyPqz9me4sfE95KU5PRgZQuI9H2i4cUmn07bUU=
+github.com/alecthomas/participle v0.4.2-0.20200107002021-f4a898cf4f8a/go.mod h1:T8u4bQOSMwrkTWOSyt8/jSFPEnRtd0FKFMjVfYBlqPs=
 github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 h1:GDQdwm/gAcJcLAKQQZGOJ4knlw+7rfEQQcmwTbt4p5E=
 github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1/go.mod h1:xTS7Pm1pD1mvyM075QCDSRqH6qRLXylzS24ZTpRiSzQ=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

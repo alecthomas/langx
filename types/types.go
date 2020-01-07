@@ -18,7 +18,7 @@ type TypeField struct {
 type Type interface {
 	Reference
 	// Returns true if this type can be coerced to the other type.
-	CoercibleTo(other Type) bool
+	Coerce(other Type) Type
 	// Returns true if the given operator can be applied to this type
 	// and (optionally) the other type. For unary operators rhs will
 	// be None.
@@ -37,11 +37,7 @@ func TypeFieldByName(t Type, name string) *TypeField {
 	return nil
 }
 
-type typeType struct{}
-
 var (
-	// Meta types.
-	Meta   Type = typeType{}
 	None   Type = Builtin(KindNone)
 	Number Type = Builtin(KindNumber)
 	// Builtin concrete types.
@@ -51,13 +47,17 @@ var (
 	Bool   Type = Builtin(KindBool)
 )
 
-func (t typeType) Type() Type                        { return t }
-func (t typeType) Kind() Kind                        { return KindType }
-func (t typeType) CoercibleTo(other Type) bool       { return false }
-func (t typeType) CanApply(op Op, other Type) bool   { return false }
-func (t typeType) Fields() []TypeField               { return nil }
-func (t typeType) FieldByName(name string) Reference { return nil }
-func (t typeType) String() string                    { return "meta" }
+type Generic struct {
+	Constraints []Type
+}
+
+func (t Generic) Type() Type                        { return t }
+func (t Generic) Kind() Kind                        { return KindType }
+func (t Generic) Coerce(other Type) Type            { return nil }
+func (t Generic) CanApply(op Op, other Type) bool   { return false }
+func (t Generic) Fields() []TypeField               { return nil }
+func (t Generic) FieldByName(name string) Reference { return nil }
+func (t Generic) String() string                    { return "meta" }
 
 // Builtin represents a builtin type.
 type Builtin Kind
@@ -74,8 +74,11 @@ func (b Builtin) Kind() Kind                        { return Kind(b) }
 func (b Builtin) Fields() []TypeField               { return nil }
 func (b Builtin) FieldByName(name string) Reference { return nil }
 
-func (b Builtin) CoercibleTo(other Type) bool {
-	return b == other || coercionMap[coercionKey{b.Kind(), other.Kind()}]
+func (b Builtin) Coerce(other Type) Type {
+	if b == other || coercionMap[coercionKey{b.Kind(), other.Kind()}] {
+		return other
+	}
+	return nil
 }
 func (b Builtin) CanApply(op Op, other Type) bool {
 	return opMap[opKey{b.Kind(), op, other.Kind()}]
@@ -95,7 +98,7 @@ var _ Type = &Function{}
 
 func (f *Function) Type() Type                        { return f }
 func (f *Function) Kind() Kind                        { return KindFunc }
-func (f *Function) CoercibleTo(other Type) bool       { return false }
+func (f *Function) Coerce(other Type) Type            { return nil }
 func (f *Function) CanApply(op Op, other Type) bool   { return false }
 func (f *Function) Fields() []TypeField               { return nil }
 func (f *Function) FieldByName(name string) Reference { return nil }
@@ -122,9 +125,14 @@ type Class struct {
 
 var _ Type = &Class{}
 
-func (s *Class) Type() Type                      { return s }
-func (s *Class) Kind() Kind                      { return KindClass }
-func (s *Class) CoercibleTo(other Type) bool     { return other == s }
+func (s *Class) Type() Type { return s }
+func (s *Class) Kind() Kind { return KindClass }
+func (s *Class) Coerce(other Type) Type {
+	if other == s {
+		return other
+	}
+	return nil
+}
 func (s *Class) CanApply(op Op, other Type) bool { return false }
 func (s *Class) Fields() []TypeField             { return s.Flds }
 func (s *Class) FieldByName(name string) Reference {
@@ -145,7 +153,7 @@ type Case struct {
 
 func (c *Case) Type() Type                        { return c }
 func (c *Case) Kind() Kind                        { return KindCase }
-func (c *Case) CoercibleTo(other Type) bool       { return false }
+func (c *Case) Coerce(other Type) Type            { return nil }
 func (c *Case) CanApply(op Op, rhs Type) bool     { return false }
 func (c *Case) Fields() []TypeField               { return nil }
 func (c *Case) FieldByName(name string) Reference { return nil }
@@ -162,11 +170,14 @@ var _ Type = &Enum{}
 
 func (e *Enum) Type() Type { return e }
 func (e *Enum) Kind() Kind { return KindEnum }
-func (e *Enum) CoercibleTo(other Type) bool {
+func (e *Enum) Coerce(other Type) Type {
 	if cse, ok := other.(*Case); ok {
-		return cse.Enum == e
+		return cse
 	}
-	return other == e
+	if other == e {
+		return other
+	}
+	return nil
 }
 func (e *Enum) CanApply(op Op, other Type) bool { return false }
 func (e *Enum) Fields() []TypeField             { return e.Flds }

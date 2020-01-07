@@ -6,7 +6,6 @@ import (
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
-	"github.com/alecthomas/repr"
 
 	"github.com/alecthomas/langx/parser"
 	"github.com/alecthomas/langx/types"
@@ -96,7 +95,7 @@ func (a *analyser) checkFuncScopes() error {
 func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	// Add the enum to the parent scope.
 	enumt := &types.Enum{}
-	err := scope.AddType(enum.Name.Type, enumt)
+	err := scope.AddType(enum.Type.Type, enumt)
 	if err != nil {
 		return participle.Errorf(enum.Pos, "%s", err)
 	}
@@ -106,6 +105,14 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	if err != nil {
 		return participle.Errorf(enum.Pos, "%s", err)
 	}
+
+	// Add generics to the enum scope.
+	t := enum.Type
+	err = a.declGenericParameters(enumScope, t)
+	if err != nil {
+		return err
+	}
+
 	// Create a sub-scope for all the fields.
 	enumScope = enumScope.Sub(nil)
 	for _, member := range enum.Members {
@@ -150,6 +157,16 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	return nil
 }
 
+func (a *analyser) declGenericParameters(scope *Scope, t *parser.Type) error {
+	for _, gp := range t.Generics {
+		err := scope.AddType(gp.Name, types.Generic{})
+		if err != nil {
+			return participle.AnnotateError(t.Pos, err)
+		}
+	}
+	return nil
+}
+
 func (a *analyser) scopeToTypeFields(scope *Scope) []types.TypeField {
 	symbols := scope.Symbols()
 	var out []types.TypeField
@@ -191,7 +208,7 @@ func (a *analyser) resolveType(scope *Scope, cse *parser.Type) (types.Type, erro
 
 func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 	clst := &types.Class{}
-	err := scope.AddType(class.Name.Type, clst)
+	err := scope.AddType(class.Type.Type, clst)
 	if err != nil {
 		return participle.Errorf(class.Pos, "%s", err)
 	}
@@ -199,8 +216,13 @@ func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 	classScope := scope.Sub(clst)
 	err = classScope.AddValue("self", &types.Value{Typ: clst})
 	if err != nil {
-		return participle.Errorf(class.Pos, "%s", err)
+		return participle.AnnotateError(class.Pos, err)
 	}
+	err = a.declGenericParameters(classScope, class.Type)
+	if err != nil {
+		return err
+	}
+
 	// Create a sub-scope for all the fields.
 	classScope = classScope.Sub(nil)
 	for _, member := range class.Members {
@@ -345,7 +367,7 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		if err != nil {
 			return err
 		}
-		if !val.Type().CoercibleTo(f.ReturnType) {
+		if val.Type().Coerce(f.ReturnType) == nil {
 			return participle.Errorf(stmt.Return.Pos, "cannot return %s as %s", val.Kind(), f.ReturnType.Kind())
 		}
 		return nil
@@ -489,7 +511,7 @@ func (a *analyser) checkSwitchOnValue(scope *Scope, target types.Type, stmt *par
 			if err != nil {
 				return err
 			}
-			if !resolvedCase.Type().CoercibleTo(target.Type()) {
+			if resolvedCase.Type().Coerce(target.Type()) == nil {
 				return participle.Errorf(cse.Case.ExprCase.Pos, "can't select case of type %s from %s", resolvedCase, target)
 			}
 		}
@@ -577,7 +599,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			if err != nil {
 				return err
 			}
-			if dfltTyp != nil && !typ.CoercibleTo(dfltTyp) {
+			if dfltTyp != nil && typ.Coerce(dfltTyp) == nil {
 				return participle.Errorf(decl.Default.Pos, "can't assign %s to %s", dfltTyp, typ)
 			}
 		}
@@ -730,7 +752,7 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, terminal *
 			return nil, participle.Errorf(terminal.Call.Pos, "untyped case %q should not be called", terminal.Ident)
 		}
 		// Synthesise case parameters.
-		parameters := []types.Parameter{{Type: ref.Case}}
+		parameters := []types.Parameter{{Type: ref.Case, Name: ref.Name}}
 		_, err := a.resolveCallActual(scope, ref.Case, parameters, terminal.Call)
 		if err != nil {
 			return nil, err
@@ -771,8 +793,8 @@ func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parame
 			return nil, err
 		}
 		parameter := parameters[i]
-		if !value.Type().CoercibleTo(parameter.Type) {
-			return nil, participle.Errorf(param.Pos, "can't coerce parameter %q from %s to %s",
+		if value.Type().Coerce(parameter.Type) == nil {
+			return nil, participle.Errorf(param.Pos, "can't coerce %q from %s to %s",
 				parameter.Name, value.Kind(), parameter.Type)
 		}
 	}
@@ -816,7 +838,7 @@ func (a *analyser) resolveLiteral(literal *parser.Literal) (types.Reference, err
 		return &types.Value{Typ: types.Bool}, nil
 
 	default:
-		panic(repr.String(literal))
+		return nil, participle.Errorf(literal.Pos, "unsupported literal %s", literal.Describe())
 	}
 }
 

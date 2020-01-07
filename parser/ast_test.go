@@ -13,13 +13,19 @@ const testSource = `
 import "os"
 
 pub class Vector {
-    pub let x, y, z float = (0, 0, 0)
+    pub let x, y, z: float = (0, 0, 0)
 
-    override pub fn length() float { // Pure.
+	init(x, y, z: float) {
+		self.x = x
+		self.y = y
+		self.z = z
+	}
+
+    override pub fn length(): float { // Pure.
         return Math.sqrt(x * x + y * y + z * z)
     }
 
-    pub fn add(other Vector) { // Impure.
+    pub fn add(other: Vector) { // Impure.
         x += other.x
         y += other.y
         z += \
@@ -31,7 +37,7 @@ pub class Vector {
 
 		go closure()
 
-		let v = Vector{x: 1}
+		let v = Vector(1, 2, 3)
 	
 		if (x > 10) {
 			x = 10
@@ -42,7 +48,7 @@ pub class Vector {
 	}
 }
 
-let origin = Vector{x: 0, y: 0, z: 0,}
+let origin = Vector()
 	
 enum Result<T> {
     case value(T)
@@ -81,7 +87,42 @@ func BenchmarkParse(b *testing.B) {
 }
 
 func TestParse(t *testing.T) {
-	ast, err := ParseString(testSource)
-	repr.Println(ast)
-	require.NoError(t, err)
+	tests := []struct {
+		name   string
+		source string
+		fail   string
+	}{
+		{name: "FullSource",
+			source: testSource},
+		{name: "ArrayLiteral",
+			source: `
+				fn f(a: [int]) {}
+
+				let a = [1, 2, 3]
+			`},
+		{name: "SetLiteral",
+			source: `
+				fn f(a: {int}) {}
+
+				let a = f({1, 2, 3})
+			`},
+		{name: "DictLiteral",
+			source: `
+				fn f(a:{int:[int]}) {}
+
+				let a = f({1:[2], 2:[3], 3:[4]})
+			`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ast, err := ParseString(test.source)
+			if test.fail != "" {
+				require.EqualError(t, err, test.fail, repr.String(ast, repr.Indent("  ")))
+			} else {
+				require.NoError(t, err, repr.String(ast, repr.Indent("  ")))
+			}
+			repr.Println(ast)
+		})
+	}
 }

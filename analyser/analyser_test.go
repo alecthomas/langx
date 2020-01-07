@@ -26,7 +26,7 @@ func TestAnalyser(t *testing.T) {
 	}{
 		{name: "Call",
 			input: `
-				fn f() int { return 1 }
+				fn f(): int { return 1 }
 				let v = f()
 				`,
 			refs: refs{
@@ -34,22 +34,22 @@ func TestAnalyser(t *testing.T) {
 				"v": {&types.Value{Typ: types.Int}, nil},
 			},
 		},
-		{name: "CallInvalidArgs",
+		{name: "CallInvalidNumberOfArguments",
 			input: `
-				fn f(a, b int) int { return 1 }
+				fn f(a, b: int): int { return 1 }
 				let v = f()
 				`,
 			fail: "3:14: 0 parameters provided for function that takes 2 parameters",
 		},
-		{name: "CallInvalidArgs",
+		{name: "CallInvalidArgumentType",
 			input: `
-				fn f(a, b int) int { return 1 }
+				fn f(a, b: int): int { return 1 }
 				let v = f(1, "moo")
 				`,
-			fail: "3:18: can't coerce parameter \"b\" from string to int",
+			fail: "3:18: can't coerce \"b\" from string to int",
 		},
 		{name: "VarDecl",
-			input: "let a, b = 1, c, d string",
+			input: "let a, b = 1, c, d: string",
 			refs: refs{
 				"a": {&types.Value{Typ: types.Int}, nil},
 				"b": {&types.Value{Typ: types.Int}, nil},
@@ -58,12 +58,12 @@ func TestAnalyser(t *testing.T) {
 			},
 		},
 		{name: "VarDeclUntyped",
-			input: "let a, b = 1, c, d string, e",
-			fail:  "1:28: type not specified (and no default value provided)",
+			input: "let a, b = 1, c, d: string, e",
+			fail:  "1:29: type not specified (and no default value provided)",
 		},
 		{name: "ConstantTypeMismatch",
-			input: "let a string = 1",
-			fail:  "1:16: can't assign int to string",
+			input: "let a: string = 1",
+			fail:  "1:17: can't assign int to string",
 		},
 		{name: "Class",
 			input: `class Class {}`,
@@ -84,7 +84,7 @@ func TestAnalyser(t *testing.T) {
 		{name: "ClassCreationCustomInit",
 			input: `
 				class Class {
-					init(a, b int) {
+					init(a, b: int) {
 					}
 				}
 		
@@ -202,8 +202,8 @@ func TestAnalyser(t *testing.T) {
 				}
 		
 				fn f() {
-					let a Enum = Enum.None
-					let b Enum = Enum.Int(1)
+					let a: Enum = Enum.None
+					let b: Enum = Enum.Int(1)
 				}
 			`,
 		},
@@ -215,7 +215,7 @@ func TestAnalyser(t *testing.T) {
 				}
 		
 				fn f() {
-					let a Enum = Enum.Int(1)
+					let a: Enum = Enum.Int(1)
 		
 					switch (a) {
 					case .Int(n):
@@ -309,10 +309,29 @@ func TestAnalyser(t *testing.T) {
 			`,
 			fail: `10:17: unexpected token "," (expected ")")`,
 		},
+		{name: "GenericClass",
+			input: `
+				class Pair<A, B> {
+					let a: A
+					let b: B
+				}
+			`,},
+		{name: "GenericEnum",
+			input: `
+				enum Maybe<T> {
+					case None
+					case Some(T)
+				}
+			`,},
+		{name: "ArrayLiteral",
+			input: `
+				let a = [1, 2, 3]
+			`,
+		},
 		{name: "Self",
 			input: `
 				class Class {
-					let a int
+					let a: int
 	
 					init() {
 						self.a = 2

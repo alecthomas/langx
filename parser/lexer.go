@@ -44,7 +44,7 @@ next:
 			l.last = token
 			continue next
 
-		case "break", "continue", "fallthrough", "return", "++", "--", ")", "}":
+		case "break", "continue", "fallthrough", "return", "++", "--", ")", "}", "]":
 			token.Value = ";"
 			token.Type = ';'
 
