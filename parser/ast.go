@@ -16,7 +16,7 @@ var (
 		whitespace = [\r\t ]+
 	
 		Modifier = \b(pub|override)\b
-		Keyword = \b(switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
+		Keyword = \b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
@@ -196,6 +196,7 @@ type Stmt struct {
 	Return    *ReturnStmt `  @@`
 	Go        *GoStmt     `| @@`
 	If        *IfStmt     `| @@`
+	For       *ForStmt    `| @@`
 	Switch    *SwitchStmt `| @@`
 	Block     *Block      `| @@`
 	VarDecl   *VarDecl    `| @@`
@@ -219,18 +220,26 @@ type GoStmt struct {
 	Call *Terminal `"go" @@`
 }
 
+type ForStmt struct {
+	Pos lexer.Position
+
+	Target *Terminal `"for" @@`
+	Source *Expr     `"in" @@`
+	Body   *Block    `@@`
+}
+
 type IfStmt struct {
 	Pos lexer.Position
 
-	Condition *Expr `"if" "(" @@ ")"`
-	Main      *Stmt `@@`
-	Else      *Stmt `( "else" @@ )?`
+	Condition *Expr  `"if" @@`
+	Main      *Block `@@`
+	Else      *Block `( "else" @@ )?`
 }
 
 type SwitchStmt struct {
 	Pos lexer.Position
 
-	Target *Expr       `"switch" "(" @@ ")" "{"`
+	Target *Expr       `"switch" @@ "{"`
 	Cases  []*CaseStmt `@@* "}"`
 }
 

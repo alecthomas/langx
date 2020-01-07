@@ -4,19 +4,6 @@ import (
 	"fmt"
 )
 
-// A Reference is either a Type or a *Value.
-type Reference interface {
-	// Kind of the Reference.
-	Kind() Kind
-	// Type of the Reference.
-	//
-	// For Types this will always return itself.
-	Type() Type
-	// FieldByName returns the "." referenced field, if any.
-	FieldByName(name string) Reference
-	String() string
-}
-
 type Field struct {
 	Name string
 	*Value

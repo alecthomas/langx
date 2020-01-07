@@ -14,6 +14,19 @@ type TypeField struct {
 	Type Type
 }
 
+// A Reference is either a Type or a *Value.
+type Reference interface {
+	// Kind of the Reference.
+	Kind() Kind
+	// Type of the Reference.
+	//
+	// For Types this will always return itself.
+	Type() Type
+	// FieldByName returns the "." referenced field, if any.
+	FieldByName(name string) Reference
+	String() string
+}
+
 // A Type.
 type Type interface {
 	Reference
@@ -24,17 +37,9 @@ type Type interface {
 	// be None.
 	CanApply(op Op, rhs Type) bool
 	// Fields (if any).
+	//
+	// For generic types this will be the type parameters.
 	Fields() []TypeField
-}
-
-// TypeFieldByName attempts to find a field on a type, by name.
-func TypeFieldByName(t Type, name string) *TypeField {
-	for _, f := range t.Fields() {
-		if f.Name == name {
-			return &f
-		}
-	}
-	return nil
 }
 
 var (
@@ -47,17 +52,85 @@ var (
 	Bool   Type = Builtin(KindBool)
 )
 
+// A Generic type.
 type Generic struct {
-	Constraints []Type
+	Constraints []TypeField
 }
 
-func (t Generic) Type() Type                        { return t }
-func (t Generic) Kind() Kind                        { return KindType }
-func (t Generic) Coerce(other Type) Type            { return nil }
-func (t Generic) CanApply(op Op, other Type) bool   { return false }
-func (t Generic) Fields() []TypeField               { return nil }
-func (t Generic) FieldByName(name string) Reference { return nil }
-func (t Generic) String() string                    { return "meta" }
+func (t Generic) Type() Type { return t }
+func (t Generic) Kind() Kind { return KindGeneric }
+func (t Generic) Coerce(other Type) Type {
+	otherg, ok := other.Type().(Generic)
+	if !ok {
+		return nil
+	}
+	if len(otherg.Constraints) != len(t.Constraints) {
+		return nil
+	}
+	for i, c := range otherg.Constraints {
+		if t.Constraints[i].Type.Coerce(c.Type) == nil {
+			return nil
+		}
+	}
+	return other
+}
+func (t Generic) CanApply(op Op, other Type) bool { return false }
+func (t Generic) Fields() []TypeField             { return t.Constraints }
+func (t Generic) FieldByName(name string) Reference {
+	for _, f := range t.Constraints {
+		if f.Name == name {
+			return f.Type
+		}
+	}
+	return nil
+}
+func (t Generic) String() string {
+	if len(t.Constraints) == 0 {
+		return "generic"
+	}
+	constraints := []string{}
+	for _, c := range t.Constraints {
+		constraints = append(constraints, c.Type.String())
+	}
+	return fmt.Sprintf("generic<%s>", strings.Join(constraints, ", "))
+}
+
+type MapType struct {
+	Generic
+}
+
+func Map(key, value Type) Type {
+	return MapType{Generic{Constraints: []TypeField{
+		{"Key", key},
+		{"Value", value},
+	}}}
+}
+
+func (m MapType) Type() Type { return m }
+func (m MapType) String() string {
+	return fmt.Sprintf("{%s:%s}", m.Constraints[0].Type, m.Constraints[1].Type)
+}
+
+type ArrayType struct {
+	Generic
+}
+
+func Array(value Type) Type {
+	return ArrayType{Generic{Constraints: []TypeField{{"Value", value}}}}
+}
+
+func (a ArrayType) String() string { return fmt.Sprintf("[%s]", a.Constraints[0].Type) }
+
+type SetType struct {
+	Generic
+}
+
+func Set(value Type) Type {
+	return SetType{Generic{Constraints: []TypeField{{"Value", value}}}}
+}
+
+func (s SetType) Type() Type     { return s }
+func (s SetType) String() string { return fmt.Sprintf("{%s}", s.Constraints[0].Type) }
 
 // Builtin represents a builtin type.
 type Builtin Kind
@@ -201,14 +274,17 @@ func (e *Enum) Cases() []*Case {
 	return cases
 }
 
-// MakeConcrete maps "t" to a concrete Type if it is a compile-time only type.
-func MakeConcrete(t Type) (Type, error) {
-	switch t {
+// MakeConcrete maps "t" to a concrete Reference if it is a compile-time only type.
+func MakeConcrete(r Reference) (Reference, error) {
+	switch r.Type() {
 	case Number:
+		if _, ok := r.(*Value); ok {
+			return &Value{Int}, nil
+		}
 		return Int, nil
 
 	case None:
-		return nil, fmt.Errorf("none is unusable")
+		return nil, fmt.Errorf("can't reference \"none\"")
 	}
-	return t, nil
+	return r, nil
 }

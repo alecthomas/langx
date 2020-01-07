@@ -387,10 +387,10 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		if err := a.checkBoolExpr(scope, stmt.Condition); err != nil {
 			return err
 		}
-		if err := a.checkStatement(scope.Sub(nil), stmt.Main); err != nil {
+		if err := a.checkBlock(scope.Sub(nil), stmt.Main); err != nil {
 			return err
 		}
-		return a.checkStatement(scope.Sub(nil), stmt.Else)
+		return a.checkBlock(scope.Sub(nil), stmt.Else)
 
 	case stmt.Go != nil:
 		if stmt.Go.Call == nil {
@@ -583,10 +583,11 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			if err != nil {
 				return err
 			}
-			dfltTyp, err = types.MakeConcrete(dfltValue.Type())
+			ref, err := types.MakeConcrete(dfltValue.Type())
 			if err != nil {
 				return participle.Errorf(decl.Default.Pos, "invalid default value: %s", err)
 			}
+			dfltTyp = ref.(types.Type)
 		}
 		if decl.Type == nil {
 			if dfltTyp == nil {
@@ -631,7 +632,7 @@ func (a *analyser) resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Val
 		return ref.Value, nil
 
 	default:
-		return nil, participle.Errorf(expr.Pos, "expected a value but got %s", ref)
+		return nil, participle.Errorf(expr.Pos, "expected a value expression but got %s", ref)
 	}
 }
 
@@ -642,7 +643,7 @@ func (a *analyser) resolveExprType(scope *Scope, expr *parser.Expr) (types.Type,
 	}
 	typ, ok := ref.(types.Type)
 	if !ok {
-		return nil, participle.Errorf(expr.Pos, "expected a type but got a %s value", ref.Kind())
+		return nil, participle.Errorf(expr.Pos, "expected a type but got %s", ref)
 	}
 	return typ, nil
 }
@@ -705,7 +706,7 @@ func (a *analyser) resolveTerminalValue(scope *Scope, terminal *parser.Terminal)
 	}
 	val, ok := ref.(*types.Value)
 	if !ok {
-		return nil, participle.Errorf(terminal.Pos, "expected a value but got %s", ref.Kind())
+		return nil, participle.Errorf(terminal.Pos, "expected a terminal value but got %s", ref.Kind())
 	}
 	return val, nil
 }
@@ -713,7 +714,7 @@ func (a *analyser) resolveTerminalValue(scope *Scope, terminal *parser.Terminal)
 func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, error) {
 	switch {
 	case terminal.Literal != nil:
-		return a.resolveLiteral(terminal.Literal)
+		return a.resolveLiteral(scope, terminal.Literal)
 
 	case terminal.Ident != "":
 		sym := scope.Resolve(terminal.Ident)
@@ -825,7 +826,7 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 	}
 }
 
-func (a *analyser) resolveLiteral(literal *parser.Literal) (types.Reference, error) {
+func (a *analyser) resolveLiteral(scope *Scope, literal *parser.Literal) (types.Reference, error) {
 	switch {
 	case literal.Number != nil:
 		return &types.Value{Typ: types.Number}, nil
@@ -837,9 +838,87 @@ func (a *analyser) resolveLiteral(literal *parser.Literal) (types.Reference, err
 	case literal.Bool != nil:
 		return &types.Value{Typ: types.Bool}, nil
 
+	case literal.Array != nil:
+		return a.resolveArrayLiteral(scope, literal.Array)
+
+	case literal.DictOrSet != nil:
+		return a.resolveDictOrSetLiteral(scope, literal.DictOrSet)
+
 	default:
 		return nil, participle.Errorf(literal.Pos, "unsupported literal %s", literal.Describe())
 	}
+}
+
+func (a *analyser) resolveArrayLiteral(scope *Scope, array *parser.ArrayLiteral) (types.Reference, error) {
+	var (
+		element types.Reference
+		err     error
+	)
+	for _, v := range array.Values {
+		element, err = a.checkCompoundTypeConsistency(scope, v, element)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if element == nil {
+		return nil, participle.Errorf(array.Pos, "can't infer element type from empty array")
+	}
+	if _, ok := element.(*types.Value); ok {
+		return &types.Value{types.Array(element.Type())}, nil
+	}
+	return types.Array(element.Type()), nil
+}
+
+func (a *analyser) resolveDictOrSetLiteral(scope *Scope, value *parser.DictOrSetLiteral) (types.Reference, error) {
+	if value.Entries[0].Value != nil {
+		return a.resolveDictLiteral(scope, value)
+	}
+	return a.resolveSetLiteral(scope, value)
+}
+
+func (a *analyser) resolveSetLiteral(scope *Scope, set *parser.DictOrSetLiteral) (types.Reference, error) {
+	var (
+		err     error
+		element types.Reference
+	)
+	for i, v := range set.Entries {
+		if v.Value != nil {
+			return nil, participle.Errorf(set.Pos, "dict value in set at index %d", i)
+		}
+		element, err = a.checkCompoundTypeConsistency(scope, v.Key, element)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, ok := element.(*types.Value); ok {
+		return &types.Value{types.Set(element.Type())}, nil
+	}
+	return types.Set(element.Type()), nil
+}
+
+func (a *analyser) resolveDictLiteral(scope *Scope, dict *parser.DictOrSetLiteral) (types.Reference, error) {
+	var (
+		err        error
+		key, value types.Reference
+	)
+	for i, v := range dict.Entries {
+		if v.Value == nil {
+			return nil, participle.Errorf(dict.Pos, "set value in dict at index %d", i)
+		}
+		key, err = a.checkCompoundTypeConsistency(scope, v.Key, key)
+		if err != nil {
+			return nil, err
+		}
+		// Check value type.
+		value, err = a.checkCompoundTypeConsistency(scope, v.Value, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, ok := key.(*types.Value); ok {
+		return &types.Value{types.Map(key.Type(), value.Type())}, nil
+	}
+	return types.Map(key.Type(), value.Type()), nil
 }
 
 // Declare vars of typ in scope.
@@ -854,4 +933,22 @@ func (a *analyser) declVars(pos lexer.Position, scope *Scope, value *types.Value
 		}
 	}
 	return nil
+}
+
+func (a *analyser) checkCompoundTypeConsistency(scope *Scope, expr *parser.Expr, element types.Reference) (types.Reference, error) {
+	t, err := a.resolveExpr(scope, expr)
+	if err != nil {
+		return nil, err
+	}
+	if element == nil {
+		element, err = types.MakeConcrete(t)
+		if err != nil {
+			return nil, participle.AnnotateError(expr.Pos, err)
+		}
+	} else {
+		if t.Type().Coerce(element.Type()) == nil {
+			return nil, participle.Errorf(expr.Pos, "inconsistent element types %s and %s", element.Type(), t.Type())
+		}
+	}
+	return element, nil
 }

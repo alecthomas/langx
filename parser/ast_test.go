@@ -39,7 +39,7 @@ pub class Vector {
 
 		let v = Vector(1, 2, 3)
 	
-		if (x > 10) {
+		if x > 10 {
 			x = 10
 			closure()
 		} else {
@@ -66,7 +66,10 @@ enum Option<T> {
 fn test() {
 	let result = Result.value("hello world")
 
-	switch (result) {
+	for v in result {
+	}
+
+	switch result {
 	case .value(v):
 		println(v)
 

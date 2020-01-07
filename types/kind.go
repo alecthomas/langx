@@ -5,9 +5,9 @@ package types
 type Kind int
 
 const (
-	KindNone Kind = iota // none
-	KindType             // type
-	KindFunc             // function
+	KindNone    Kind = iota // none
+	KindGeneric             // generic
+	KindFunc                // function
 	// Numeric constant (can become any numeric type).
 	KindNumber // number
 	KindString // string

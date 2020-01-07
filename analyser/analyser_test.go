@@ -155,7 +155,7 @@ func TestAnalyser(t *testing.T) {
 			input: `
 				fn f() {
 					let a = 1
-					switch (a) {
+					switch a {
 					case 1:
 					case 2:
 					}
@@ -166,7 +166,7 @@ func TestAnalyser(t *testing.T) {
 			input: `
 				fn f() {
 					let a = 1
-					switch (a) {
+					switch a {
 					case "one":
 					case 2:
 					}
@@ -184,7 +184,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .None:
 					case .Int(n):
 						g = n
@@ -217,7 +217,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a: Enum = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .Int(n):
 						g = n
 					default:
@@ -237,7 +237,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .None:
 					}
 				}
@@ -254,7 +254,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .Unknown:
 					}
 				}
@@ -270,7 +270,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .Int:
 					}
 				}
@@ -286,7 +286,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int
 		
-					switch (a) {
+					switch a {
 					case .Int(n):
 					}
 				}
@@ -302,7 +302,7 @@ func TestAnalyser(t *testing.T) {
 				fn f() {
 					let a = Enum.Int(1)
 		
-					switch (a) {
+					switch a {
 					case .Int(n, m):
 					}
 				}
@@ -323,11 +323,6 @@ func TestAnalyser(t *testing.T) {
 					case Some(T)
 				}
 			`,},
-		{name: "ArrayLiteral",
-			input: `
-				let a = [1, 2, 3]
-			`,
-		},
 		{name: "Self",
 			input: `
 				class Class {
@@ -369,6 +364,81 @@ func TestAnalyser(t *testing.T) {
 			}
 			`,
 		},
+		{name: "ArrayLiteralInferred",
+			input: `
+				let a = [1, 2, 3]
+			`,
+			refs: refs{
+				"a": {&types.Value{types.Array(types.Int)}, nil},
+			}},
+		{name: "ArrayLiteralExplicit",
+			input: `
+				let a: [int] = [1, 2, 3]
+			`,
+			refs: refs{
+				"a": {&types.Value{types.Array(types.Int)}, nil},
+			}},
+		{name: "ArrayLiteralInvalidExplicit",
+			input: `
+				let a: [string] = [1, 2, 3]
+			`,
+			fail: `2:23: can't assign [int] to [string]`,
+		},
+		{name: "ArrayLiteralAssignToMap",
+			input: `
+				let a: {string: int} = [1, 2, 3]
+			`,
+			fail: `2:28: can't assign [int] to {string:int}`,
+		},
+		{name: "ArrayLiteralHeterogeneous",
+			input: `
+				let a = [1, 2, "3"]
+			`,
+			fail: `2:20: inconsistent element types int and string`,
+		},
+		{name: "SetLiteral",
+			input: `
+				let a = {1, 2, 3}
+			`,
+			refs: refs{
+				"a": {&types.Value{types.Set(types.Int)}, nil},
+			}},
+		{name: "SetLiteralHeterogeneous",
+			input: `
+				let a = {1, 2, "3"}
+			`,
+			fail: `2:20: inconsistent element types int and string`,
+		},
+		{name: "SetAndDictValuesIntermingled",
+			input: `
+				let a = {1, 2:3}
+			`,
+			fail: `2:13: dict value in set at index 1`,
+		},
+		{name: "DictLiteral",
+			input: `
+				let a = {1:"2", 2:"3", 3:"4"}
+			`,
+			refs: refs{
+				"a": {&types.Value{types.Map(types.Int, types.String)}, nil},
+			}},
+		{name: "DictLiteralHeterogeneousKey",
+			input: `
+				let a = {1:2, 2:3, "3":4}
+			`,
+			fail: `2:24: inconsistent element types int and string`,
+		},
+		{name: "DictLiteralHeterogeneousValue",
+			input: `
+				let a = {1:2, 2:3, 3:"4"}
+			`,
+			fail: `2:26: inconsistent element types int and string`,
+		},
+		{name: "ArrayType",
+			input: `
+				fn f(a: [int]) {
+				}
+			`},
 	}
 
 	for _, test := range tests {

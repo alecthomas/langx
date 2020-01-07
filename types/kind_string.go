@@ -9,7 +9,7 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[KindNone-0]
-	_ = x[KindType-1]
+	_ = x[KindGeneric-1]
 	_ = x[KindFunc-2]
 	_ = x[KindNumber-3]
 	_ = x[KindString-4]
@@ -24,9 +24,9 @@ func _() {
 	_ = x[KindAlias-13]
 }
 
-const _Kind_name = "nonetypefunctionnumberstringboolintfloatchantupleclassenumcasealias"
+const _Kind_name = "nonegenericfunctionnumberstringboolintfloatchantupleclassenumcasealias"
 
-var _Kind_index = [...]uint8{0, 4, 8, 16, 22, 28, 32, 35, 40, 44, 49, 54, 58, 62, 67}
+var _Kind_index = [...]uint8{0, 4, 11, 19, 25, 31, 35, 38, 43, 47, 52, 57, 61, 65, 70}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {
