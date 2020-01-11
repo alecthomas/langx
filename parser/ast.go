@@ -2,7 +2,6 @@ package parser
 
 import (
 	"io"
-	"strings"
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
@@ -15,7 +14,7 @@ var (
 		backslash = \\
 		whitespace = [\r\t ]+
 	
-		Modifier = \b(pub|override)\b
+		Modifier = \b(pub|override|static)\b
 		Keyword = \b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
@@ -26,10 +25,12 @@ var (
 	`))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
+		participle.UseLookahead(1),
 		participle.Unquote(),
 	)
 	unaryParser = participle.MustBuild(&Unary{},
 		participle.Lexer(&fixupLexerDefinition{}),
+		participle.UseLookahead(1),
 		participle.Unquote(),
 	)
 
@@ -58,39 +59,6 @@ type Decl struct {
 	Func   *FuncDecl   `  | @@ ";"? ) `
 }
 
-// Modifiers of a field/function.
-type Modifiers int
-
-const (
-	ModifierPublic Modifiers = 1 << (2 * iota)
-	ModifierOverride
-)
-
-func (v Modifiers) GoString() string {
-	var modifiers []string
-	if v&ModifierOverride != 0 {
-		modifiers = append(modifiers, "parser.ModifierOverride")
-	}
-	if v&ModifierPublic != 0 {
-		modifiers = append(modifiers, "parser.ModifierPublic")
-	}
-	return strings.Join(modifiers, "|")
-}
-
-func (v *Modifiers) Capture(values []string) error {
-	switch values[0] {
-	case "pub":
-		*v |= ModifierPublic
-
-	case "override":
-		*v = ModifierOverride
-
-	default:
-		panic("??")
-	}
-	return nil
-}
-
 type ImportDecl struct {
 	Pos lexer.Position
 
@@ -101,7 +69,7 @@ type ImportDecl struct {
 type EnumDecl struct {
 	Pos lexer.Position
 
-	Type    *Type         `"enum" @@ "{"`
+	Type    *TypeDecl     `"enum" @@ "{"`
 	Members []*EnumMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
@@ -121,14 +89,14 @@ type EnumMember struct {
 type CaseDecl struct {
 	Pos lexer.Position
 
-	Name string `"case" @Ident`
-	Type *Type  `( "(" @@ ")" )?`
+	Name string    `"case" @Ident`
+	Type *TypeDecl `( "(" @@ ")" )?`
 }
 
 type ClassDecl struct {
 	Pos lexer.Position
 
-	Type    *Type          `"class" @@ "{"`
+	Type    *TypeDecl      `"class" @@ "{"`
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
@@ -152,25 +120,25 @@ type InitialiserDecl struct {
 	Body       *Block        `@@`
 }
 
-type Type struct {
+type TypeDecl struct {
 	Pos lexer.Position
 
-	Type     string          `@Ident`
-	Generics []*GenericParam `( "<" @@ ( "," @@ )* ","? ">" )?`
+	Type          string           `@Ident`
+	TypeParameter []*TypeParamDecl `( "<" @@ ( "," @@ )* ","? ">" )?`
 }
 
-type GenericParam struct {
+type TypeParamDecl struct {
 	Pos lexer.Position
 
-	Name        string  `@Ident`
-	Constraints []*Type `( ":" @@ ( "," @@ )* )?`
+	Name        string       `@Ident`
+	Constraints []*Reference `( ":" @@ ( "," @@ )* )?`
 }
 
 type Parameters struct {
 	Pos lexer.Position
 
-	Names []string  `@Ident ("," @Ident)*`
-	Type  *Terminal `":" @@`
+	Names []string   `@Ident ("," @Ident)*`
+	Type  *Reference `":" @@`
 }
 
 type VarDecl struct {
@@ -185,9 +153,9 @@ type VarDecl struct {
 type VarDeclAsgn struct {
 	Pos lexer.Position
 
-	Name    string    `@Ident`
-	Type    *Terminal `( ":" @@ )?`
-	Default *Expr     `( "=" @@ )?`
+	Name    string     `@Ident`
+	Type    *Reference `( ":" @@ )?`
+	Default *Expr      `( "=" @@ )?`
 }
 
 type Stmt struct {
@@ -217,15 +185,15 @@ type Block struct {
 type GoStmt struct {
 	Pos lexer.Position
 
-	Call *Terminal `"go" @@`
+	Call *Reference `"go" @@`
 }
 
 type ForStmt struct {
 	Pos lexer.Position
 
-	Target *Terminal `"for" @@`
-	Source *Expr     `"in" @@`
-	Body   *Block    `@@`
+	Target *Reference `"for" @@`
+	Source *Expr      `"in" @@`
+	Body   *Block     `@@`
 }
 
 type IfStmt struct {
@@ -277,7 +245,7 @@ type FuncDecl struct {
 	Name       string        `"fn" @Ident "("`
 	Parameters []*Parameters `( @@ ( "," @@ )* )? ","? ")"`
 	Throws     bool          `@"throws"?`
-	Return     *Terminal     `( ":" @@ )?`
+	Return     *Reference    `( ":" @@ )?`
 	Body       *Block        `@@`
 }
 

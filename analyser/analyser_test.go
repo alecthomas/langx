@@ -316,11 +316,28 @@ func TestAnalyser(t *testing.T) {
 					let b: B
 				}
 			`,},
+		{name: "GenericConstructor",
+			input: `
+				class Pair<A, B> {
+					let a: A
+					let b: B
+				}
+		
+				// let a = Pair<string, string>()
+				`,
+		},
 		{name: "GenericEnum",
 			input: `
 				enum Maybe<T> {
 					case None
 					case Some(T)
+				}
+			`,},
+		{name: "MultiGenericEnum",
+			input: `
+				enum OneOf<A, B> {
+					case First(A)
+					case Second(B)
 				}
 			`,},
 		{name: "Self",
@@ -439,6 +456,13 @@ func TestAnalyser(t *testing.T) {
 				fn f(a: [int]) {
 				}
 			`},
+		// This should work but doesn't because coercion doesn't work the other way.
+		{name: "OptionalDecl",
+			input: `
+				let a:int? = 1
+				let b:int = a
+			`,
+		},
 	}
 
 	for _, test := range tests {

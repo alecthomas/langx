@@ -115,6 +115,20 @@ func TestParse(t *testing.T) {
 
 				let a = f({1:[2], 2:[3], 3:[4]})
 			`},
+		{name: "ComplexReference",
+			source: `
+				let a = b[10].c()
+				`},
+		// {name: "GenericReference",
+		// 	source: `
+		// 		let a: Pair<string, int>
+		// 	`,
+		// },
+		{name: "OptionalValue",
+			source: `
+				let a: string? = "hello"
+			`,
+		},
 	}
 
 	for _, test := range tests {

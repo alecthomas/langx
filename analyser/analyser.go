@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
+	"github.com/alecthomas/repr"
 
 	"github.com/alecthomas/langx/parser"
 	"github.com/alecthomas/langx/types"
@@ -157,8 +158,8 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	return nil
 }
 
-func (a *analyser) declGenericParameters(scope *Scope, t *parser.Type) error {
-	for _, gp := range t.Generics {
+func (a *analyser) declGenericParameters(scope *Scope, t *parser.TypeDecl) error {
+	for _, gp := range t.TypeParameter {
 		err := scope.AddType(gp.Name, types.Generic{})
 		if err != nil {
 			return participle.AnnotateError(t.Pos, err)
@@ -198,7 +199,7 @@ func (a *analyser) resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.
 	return nil
 }
 
-func (a *analyser) resolveType(scope *Scope, cse *parser.Type) (types.Type, error) {
+func (a *analyser) resolveType(scope *Scope, cse *parser.TypeDecl) (types.Type, error) {
 	typ := scope.ResolveType(cse.Type)
 	if typ == nil {
 		return nil, participle.Errorf(cse.Pos, "unknown type %q", cse.Type)
@@ -285,7 +286,7 @@ func (a *analyser) checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, err
 		err        error
 	)
 	if fn.Return != nil {
-		returnType, err = a.resolveTerminalType(scope, fn.Return)
+		returnType, err = a.resolveReferenceType(scope, fn.Return)
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +318,7 @@ func (a *analyser) checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, err
 func (a *analyser) addParametersToScope(scope *Scope, parameters []*parser.Parameters) error {
 	// Add parameters to scope.
 	for _, param := range parameters {
-		typ, err := a.resolveTerminalType(scope.Parent(), param.Type)
+		typ, err := a.resolveReferenceType(scope.Parent(), param.Type)
 		if err != nil {
 			return err
 		}
@@ -332,7 +333,7 @@ func (a *analyser) addParametersToScope(scope *Scope, parameters []*parser.Param
 func (a *analyser) makeFunction(scope *Scope, returnType types.Type, parameters []*parser.Parameters) (*types.Function, error) {
 	fnt := &types.Function{ReturnType: returnType}
 	for _, param := range parameters {
-		typ, err := a.resolveTerminalType(scope, param.Type)
+		typ, err := a.resolveReferenceType(scope, param.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -396,7 +397,7 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		if stmt.Go.Call == nil {
 			return participle.Errorf(stmt.Go.Pos, "go requires a function call")
 		}
-		_, err := a.resolveTerminal(scope, stmt.Go.Call)
+		_, err := a.resolveReference(scope, stmt.Go.Call)
 		return err
 
 	case stmt.Switch != nil:
@@ -596,7 +597,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			// Infer type from the default value.
 			typ = dfltTyp
 		} else {
-			typ, err = a.resolveTerminalType(scope, decl.Type)
+			typ, err = a.resolveReferenceType(scope, decl.Type)
 			if err != nil {
 				return err
 			}
@@ -677,18 +678,18 @@ func (a *analyser) resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference
 }
 
 func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (types.Reference, error) {
-	sym, err := a.resolveTerminal(s, unary.Terminal)
+	sym, err := a.resolveReference(s, unary.Reference)
 	if err != nil {
 		return nil, err
 	}
 	if sym.Type().CanApply(unary.Op, types.None) {
 		return nil, participle.Errorf(unary.Pos, "! requires a boolean but got %s", sym.Kind())
 	}
-	return a.resolveTerminal(s, unary.Terminal)
+	return a.resolveReference(s, unary.Reference)
 }
 
-func (a *analyser) resolveTerminalType(scope *Scope, terminal *parser.Terminal) (types.Type, error) {
-	ref, err := a.resolveTerminal(scope, terminal)
+func (a *analyser) resolveReferenceType(scope *Scope, terminal *parser.Reference) (types.Type, error) {
+	ref, err := a.resolveReference(scope, terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -699,8 +700,8 @@ func (a *analyser) resolveTerminalType(scope *Scope, terminal *parser.Terminal) 
 	return val, nil
 }
 
-func (a *analyser) resolveTerminalValue(scope *Scope, terminal *parser.Terminal) (*types.Value, error) {
-	ref, err := a.resolveTerminal(scope, terminal)
+func (a *analyser) resolveReferenceValue(scope *Scope, terminal *parser.Reference) (*types.Value, error) {
+	ref, err := a.resolveReference(scope, terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -717,21 +718,17 @@ func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (typ
 		return a.resolveLiteral(scope, terminal.Literal)
 
 	case terminal.Ident != "":
-		sym := scope.Resolve(terminal.Ident)
-		if sym == nil {
+		ref := scope.Resolve(terminal.Ident)
+		if ref == nil {
 			return nil, participle.Errorf(terminal.Pos, "unknown symbol %q", terminal.Ident)
 		}
-		switch {
-		case terminal.Reference != nil:
-			return a.resolveField(scope, sym, terminal.Reference)
-
-		case terminal.Call != nil:
-			return a.resolveCallLike(scope, sym, terminal)
-
-		case terminal.Subscript != nil:
-			panic(terminal.Subscript.Pos.String())
+		if terminal.TypeParameter != nil {
+			panic("not implemented: " + repr.String(terminal, repr.Indent("  ")))
 		}
-		return sym, nil
+		if terminal.Optional {
+			ref = types.MakeOptional(ref)
+		}
+		return ref, nil
 
 	case terminal.Tuple != nil:
 		// Sub-expression.
@@ -739,22 +736,42 @@ func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (typ
 			return a.resolveExpr(scope, terminal.Tuple[0])
 		}
 		return nil, participle.Errorf(terminal.Pos, "tuples are not supported yet")
-
-	default:
-		return nil, participle.Errorf(terminal.Pos, "can't resolve %s", terminal.Describe())
 	}
+	panic("??")
+}
+
+func (a *analyser) resolveReference(scope *Scope, reference *parser.Reference) (types.Reference, error) {
+	ref, err := a.resolveTerminal(scope, reference.Terminal)
+	if err != nil {
+		return nil, err
+	}
+	next := reference.Next
+	if next == nil {
+		return ref, nil
+	}
+	switch {
+	case next.Reference != nil:
+		return a.resolveField(scope, ref, next.Reference)
+
+	case next.Call != nil:
+		return a.resolveCallLike(scope, ref, reference)
+
+	case next.Subscript != nil:
+		panic(next.Subscript.Pos.String())
+	}
+	panic("??")
 }
 
 // Resolve something that looks like a function call (function, case, class initialiser).
-func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, terminal *parser.Terminal) (*types.Value, error) {
+func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, reference *parser.Reference) (*types.Value, error) {
 	switch ref := ref.(type) {
 	case *types.Case: // Case(Type)
 		if ref.Case == nil {
-			return nil, participle.Errorf(terminal.Call.Pos, "untyped case %q should not be called", terminal.Ident)
+			return nil, participle.Errorf(reference.Next.Call.Pos, "untyped case %q should not be called", reference.Terminal.Ident)
 		}
 		// Synthesise case parameters.
 		parameters := []types.Parameter{{Type: ref.Case, Name: ref.Name}}
-		_, err := a.resolveCallActual(scope, ref.Case, parameters, terminal.Call)
+		_, err := a.resolveCallActual(scope, ref.Case, parameters, reference.Next.Call)
 		if err != nil {
 			return nil, err
 		}
@@ -765,20 +782,20 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, terminal *
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
-		return a.resolveCallActual(scope, ref, parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref, parameters, reference.Next.Call)
 
 	case *types.Enum:
 		var parameters []types.Parameter
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
-		return a.resolveCallActual(scope, ref, parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref, parameters, reference.Next.Call)
 
 	case *types.Function:
-		return a.resolveCallActual(scope, ref.ReturnType, ref.Parameters, terminal.Call)
+		return a.resolveCallActual(scope, ref.ReturnType, ref.Parameters, reference.Next.Call)
 
 	default:
-		return nil, participle.Errorf(terminal.Call.Pos, "can't call %s", ref)
+		return nil, participle.Errorf(reference.Next.Call.Pos, "can't call %s", ref)
 	}
 }
 
@@ -808,16 +825,6 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 		field := parent.FieldByName(terminal.Ident)
 		if field == nil {
 			return nil, participle.Errorf(terminal.Pos, "unknown field %s.%s", parent, terminal.Ident)
-		}
-		switch {
-		case terminal.Reference != nil:
-			return a.resolveField(scope, field, terminal.Reference)
-
-		case terminal.Call != nil:
-			return a.resolveCallLike(scope, field, terminal)
-
-		case terminal.Subscript != nil:
-			panic(terminal.Subscript.Pos.String())
 		}
 		return field, nil
 

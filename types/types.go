@@ -132,6 +132,27 @@ func Set(value Type) Type {
 func (s SetType) Type() Type     { return s }
 func (s SetType) String() string { return fmt.Sprintf("{%s}", s.Constraints[0].Type) }
 
+type OptionalType struct {
+	Enum
+}
+
+func Optional(some Type) Type {
+	return &OptionalType{Enum{Flds: []TypeField{
+		{Name: "None"},
+		{Name: "Some", Type: some},
+	}}}
+}
+
+func (s *OptionalType) Coerce(other Type) Type {
+	// TODO: How do we coerce the other way? ie. let a:int? = 1 vs. let b:int = a
+	if other == s.Enum.Flds[1].Type {
+		return s
+	}
+	return nil
+}
+func (s *OptionalType) Type() Type     { return s }
+func (s *OptionalType) String() string { return fmt.Sprintf("%s?", s.Enum.Flds[1].Type) }
+
 // Builtin represents a builtin type.
 type Builtin Kind
 
@@ -287,4 +308,16 @@ func MakeConcrete(r Reference) (Reference, error) {
 		return nil, fmt.Errorf("can't reference \"none\"")
 	}
 	return r, nil
+}
+
+// MakeOptional makes "r" into an optional (value or type).
+func MakeOptional(r Reference) Reference {
+	switch r := r.(type) {
+	case *Value:
+		return &Value{Optional(r.Type())}
+
+	case Type:
+		return Optional(r)
+	}
+	panic("??")
 }
