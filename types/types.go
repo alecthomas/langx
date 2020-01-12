@@ -27,11 +27,23 @@ type Reference interface {
 	String() string
 }
 
+type Direction int
+
+const (
+	To Direction = iota
+	From
+)
+
+type TypeDirection struct {
+	Direction Direction
+	Type      Type
+}
+
 // A Type.
 type Type interface {
 	Reference
 	// Returns true if this type can be coerced to the other type.
-	Coerce(other Type) Type
+	Coerce(direction Direction, other Type) Type
 	// Returns true if the given operator can be applied to this type
 	// and (optionally) the other type. For unary operators rhs will
 	// be None.
@@ -59,7 +71,7 @@ type Generic struct {
 
 func (t Generic) Type() Type { return t }
 func (t Generic) Kind() Kind { return KindGeneric }
-func (t Generic) Coerce(other Type) Type {
+func (t Generic) Coerce(direction Direction, other Type) Type {
 	otherg, ok := other.Type().(Generic)
 	if !ok {
 		return nil
@@ -68,7 +80,7 @@ func (t Generic) Coerce(other Type) Type {
 		return nil
 	}
 	for i, c := range otherg.Constraints {
-		if t.Constraints[i].Type.Coerce(c.Type) == nil {
+		if t.Constraints[i].Type.Coerce(To, c.Type) == nil {
 			return nil
 		}
 	}
@@ -143,8 +155,7 @@ func Optional(some Type) Type {
 	}}}
 }
 
-func (s *OptionalType) Coerce(other Type) Type {
-	// TODO: How do we coerce the other way? ie. let a:int? = 1 vs. let b:int = a
+func (s *OptionalType) Coerce(direction Direction, other Type) Type {
 	if other == s.Enum.Flds[1].Type {
 		return s
 	}
@@ -168,7 +179,7 @@ func (b Builtin) Kind() Kind                        { return Kind(b) }
 func (b Builtin) Fields() []TypeField               { return nil }
 func (b Builtin) FieldByName(name string) Reference { return nil }
 
-func (b Builtin) Coerce(other Type) Type {
+func (b Builtin) Coerce(direction Direction, other Type) Type {
 	if b == other || coercionMap[coercionKey{b.Kind(), other.Kind()}] {
 		return other
 	}
@@ -190,12 +201,12 @@ type Function struct {
 
 var _ Type = &Function{}
 
-func (f *Function) Type() Type                        { return f }
-func (f *Function) Kind() Kind                        { return KindFunc }
-func (f *Function) Coerce(other Type) Type            { return nil }
-func (f *Function) CanApply(op Op, other Type) bool   { return false }
-func (f *Function) Fields() []TypeField               { return nil }
-func (f *Function) FieldByName(name string) Reference { return nil }
+func (f *Function) Type() Type                                  { return f }
+func (f *Function) Kind() Kind                                  { return KindFunc }
+func (f *Function) Coerce(direction Direction, other Type) Type { return nil }
+func (f *Function) CanApply(op Op, other Type) bool             { return false }
+func (f *Function) Fields() []TypeField                         { return nil }
+func (f *Function) FieldByName(name string) Reference           { return nil }
 func (f *Function) String() string {
 	w := &strings.Builder{}
 	fmt.Fprint(w, "fn(")
@@ -221,7 +232,7 @@ var _ Type = &Class{}
 
 func (s *Class) Type() Type { return s }
 func (s *Class) Kind() Kind { return KindClass }
-func (s *Class) Coerce(other Type) Type {
+func (s *Class) Coerce(direction Direction, other Type) Type {
 	if other == s {
 		return other
 	}
@@ -245,13 +256,13 @@ type Case struct {
 	Case Type
 }
 
-func (c *Case) Type() Type                        { return c }
-func (c *Case) Kind() Kind                        { return KindCase }
-func (c *Case) Coerce(other Type) Type            { return nil }
-func (c *Case) CanApply(op Op, rhs Type) bool     { return false }
-func (c *Case) Fields() []TypeField               { return nil }
-func (c *Case) FieldByName(name string) Reference { return nil }
-func (c *Case) String() string                    { return "case" }
+func (c *Case) Type() Type                                  { return c }
+func (c *Case) Kind() Kind                                  { return KindCase }
+func (c *Case) Coerce(direction Direction, other Type) Type { return nil }
+func (c *Case) CanApply(op Op, rhs Type) bool               { return false }
+func (c *Case) Fields() []TypeField                         { return nil }
+func (c *Case) FieldByName(name string) Reference           { return nil }
+func (c *Case) String() string                              { return "case" }
 
 var _ Type = &Case{}
 
@@ -264,7 +275,7 @@ var _ Type = &Enum{}
 
 func (e *Enum) Type() Type { return e }
 func (e *Enum) Kind() Kind { return KindEnum }
-func (e *Enum) Coerce(other Type) Type {
+func (e *Enum) Coerce(direction Direction, other Type) Type {
 	if cse, ok := other.(*Case); ok {
 		return cse
 	}
@@ -320,4 +331,19 @@ func MakeOptional(r Reference) Reference {
 		return Optional(r)
 	}
 	panic("??")
+}
+
+// Coerce attempts to coerce a type using either side.
+func Coerce(from, to Type) Type {
+	if from == nil || to == nil {
+		return nil
+	}
+	switch {
+	case from.Coerce(To, to) != nil:
+		return to
+	
+	case to.Coerce(From, from) != nil:
+		return to
+	}
+	return nil
 }

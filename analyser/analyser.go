@@ -368,7 +368,7 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		if err != nil {
 			return err
 		}
-		if val.Type().Coerce(f.ReturnType) == nil {
+		if val.Type().Coerce(types.To, f.ReturnType) == nil {
 			return participle.Errorf(stmt.Return.Pos, "cannot return %s as %s", val.Kind(), f.ReturnType.Kind())
 		}
 		return nil
@@ -512,7 +512,7 @@ func (a *analyser) checkSwitchOnValue(scope *Scope, target types.Type, stmt *par
 			if err != nil {
 				return err
 			}
-			if resolvedCase.Type().Coerce(target.Type()) == nil {
+			if types.Coerce(resolvedCase.Type(), target.Type()) == nil {
 				return participle.Errorf(cse.Case.ExprCase.Pos, "can't select case of type %s from %s", resolvedCase, target)
 			}
 		}
@@ -601,8 +601,12 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			if err != nil {
 				return err
 			}
-			if dfltTyp != nil && typ.Coerce(dfltTyp) == nil {
-				return participle.Errorf(decl.Default.Pos, "can't assign %s to %s", dfltTyp, typ)
+			if dfltTyp != nil {
+				if coerced := types.Coerce(dfltTyp, typ); coerced == nil {
+					return participle.Errorf(decl.Default.Pos, "can't assign %s to %s", dfltTyp, typ)
+				} else {
+					typ = coerced
+				}
 			}
 		}
 		err = a.declVars(varDecl.Pos, scope, &types.Value{Typ: typ}, untyped...)
@@ -811,7 +815,7 @@ func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parame
 			return nil, err
 		}
 		parameter := parameters[i]
-		if value.Type().Coerce(parameter.Type) == nil {
+		if types.Coerce(value.Type(), parameter.Type) == nil {
 			return nil, participle.Errorf(param.Pos, "can't coerce %q from %s to %s",
 				parameter.Name, value.Kind(), parameter.Type)
 		}
@@ -953,7 +957,7 @@ func (a *analyser) checkCompoundTypeConsistency(scope *Scope, expr *parser.Expr,
 			return nil, participle.AnnotateError(expr.Pos, err)
 		}
 	} else {
-		if t.Type().Coerce(element.Type()) == nil {
+		if types.Coerce(t.Type(), element.Type()) == nil {
 			return nil, participle.Errorf(expr.Pos, "inconsistent element types %s and %s", element.Type(), t.Type())
 		}
 	}
