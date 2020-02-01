@@ -62,6 +62,21 @@ Rules:
 - Any value passed into an actor will transfer ownership to the actor.
 - If an actor named "main" exists it will be the main entry point rather than the "main" function.
 
+#### Actor functions?
+
+```
+actor fn(msg: string) {
+   print(msg)
+}
+
+let p = start poll
+p("hello")
+```
+
+Bit ugly?
+
+#### Normal actors
+
 ```
 actor Owner {
     let pet: Pet?
@@ -88,7 +103,7 @@ actor main {
         //let pets = [pet]
         // Start Actor.
         //let owner = Owner(pets[0])   // Error: can't transfer ownership of an element.
-        let owner = Owner(pet)         // Create and start the actor.
+        let owner = start Owner(pet)   // Create and start the actor.
         //pet.feed("moo")              // Error: pet is owned by "owner"
 
         // Send some messages.
