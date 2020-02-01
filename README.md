@@ -65,7 +65,7 @@ Rules:
 #### Actor functions?
 
 ```
-actor fn(msg: string) {
+actor fn poll(msg: string) {
    print(msg)
 }
 
