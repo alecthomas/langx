@@ -2,6 +2,7 @@
 package analyser
 
 import (
+	"math/big"
 	"strings"
 
 	"github.com/alecthomas/participle"
@@ -23,26 +24,13 @@ var (
 	}
 )
 
-type Program struct {
-	ast  *parser.AST
-	root *Scope
-}
-
-// Analyse performs semantic analysis on the AST.
-func Analyse(ast *parser.AST) (*Program, error) {
-	p := &Program{
-		ast:  ast,
-		root: makeScope(builtins, nil),
-	}
-	return p, new(analyser).checkRoot(p.root, p.ast)
-}
-
 type funcAndScope struct {
 	fn    *parser.Block
 	scope *Scope
 }
 
 type analyser struct {
+	p     *Program
 	funcs []funcAndScope
 }
 
@@ -96,6 +84,7 @@ func (a *analyser) checkFuncScopes() error {
 func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	// Add the enum to the parent scope.
 	enumt := &types.Enum{}
+	a.p.associate(enum, enumt)
 	err := scope.AddType(enum.Type.Type, enumt)
 	if err != nil {
 		return participle.Errorf(enum.Pos, "%s", err)
@@ -160,7 +149,10 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 
 func (a *analyser) declGenericParameters(scope *Scope, t *parser.TypeDecl) error {
 	for _, gp := range t.TypeParameter {
-		err := scope.AddType(gp.Name, types.Generic{})
+		// TODO: Constraints
+		ref := types.Generic{}
+		a.p.associate(t, ref)
+		err := scope.AddType(gp.Name, ref)
 		if err != nil {
 			return participle.AnnotateError(t.Pos, err)
 		}
@@ -393,13 +385,6 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 		}
 		return a.checkBlock(scope.Sub(nil), stmt.Else)
 
-	case stmt.Go != nil:
-		if stmt.Go.Call == nil {
-			return participle.Errorf(stmt.Go.Pos, "go requires a function call")
-		}
-		_, err := a.resolveReference(scope, stmt.Go.Call)
-		return err
-
 	case stmt.Switch != nil:
 		return a.checkSwitch(scope, stmt.Switch)
 
@@ -566,9 +551,9 @@ func (a *analyser) checkStatements(scope *Scope, statements []*parser.Stmt) erro
 }
 
 func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
-	var untyped []string
+	var untyped []*parser.VarDeclAsgn // Collect any vars that don't end up with types associated.
 	for _, decl := range varDecl.Vars {
-		untyped = append(untyped, decl.Name)
+		untyped = append(untyped, decl)
 		if decl.Type == nil && decl.Default == nil {
 			continue
 		}
@@ -584,7 +569,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			if err != nil {
 				return err
 			}
-			ref, err := types.MakeConcrete(dfltValue.Type())
+			ref, err := types.Concrete(dfltValue.Type())
 			if err != nil {
 				return participle.Errorf(decl.Default.Pos, "invalid default value: %s", err)
 			}
@@ -609,7 +594,15 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 				}
 			}
 		}
-		err = a.declVars(varDecl.Pos, scope, &types.Value{Typ: typ}, untyped...)
+		value := &types.Value{Typ: typ}
+		for _, sym := range untyped {
+			a.p.associate(sym, value)
+		}
+		names := []string{}
+		for _, decl := range untyped {
+			names = append(names, decl.Name)
+		}
+		err = a.declVars(varDecl.Pos, scope, value, names...)
 		if err != nil {
 			return err
 		}
@@ -730,7 +723,7 @@ func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (typ
 			panic("not implemented: " + repr.String(terminal, repr.Indent("  ")))
 		}
 		if terminal.Optional {
-			ref = types.MakeOptional(ref)
+			ref = types.ToOptional(ref)
 		}
 		return ref, nil
 
@@ -749,6 +742,7 @@ func (a *analyser) resolveReference(scope *Scope, reference *parser.Reference) (
 	if err != nil {
 		return nil, err
 	}
+	a.p.associate(reference, ref)
 	next := reference.Next
 	if next == nil {
 		return ref, nil
@@ -830,6 +824,7 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 		if field == nil {
 			return nil, participle.Errorf(terminal.Pos, "unknown field %s.%s", parent, terminal.Ident)
 		}
+		a.p.associate(terminal, field)
 		return field, nil
 
 	default:
@@ -840,7 +835,11 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 func (a *analyser) resolveLiteral(scope *Scope, literal *parser.Literal) (types.Reference, error) {
 	switch {
 	case literal.Number != nil:
-		return &types.Value{Typ: types.Number}, nil
+		n := big.Float(*literal.Number)
+		if n.IsInt() {
+			return &types.Value{Typ: types.NumberInt}, nil
+		}
+		return &types.Value{Typ: types.NumberFloat}, nil
 
 	case literal.Str != nil:
 		// TODO: Resolve interpolation vars eg. "\(x), \(y), \(z)".
@@ -952,7 +951,7 @@ func (a *analyser) checkCompoundTypeConsistency(scope *Scope, expr *parser.Expr,
 		return nil, err
 	}
 	if element == nil {
-		element, err = types.MakeConcrete(t)
+		element, err = types.Concrete(t)
 		if err != nil {
 			return nil, participle.AnnotateError(expr.Pos, err)
 		}

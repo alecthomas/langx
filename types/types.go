@@ -55,8 +55,9 @@ type Type interface {
 }
 
 var (
-	None   Type = Builtin(KindNone)
-	Number Type = Builtin(KindNumber)
+	None        Type = Builtin(KindNone)
+	NumberInt   Type = Builtin(KindNumberInt)
+	NumberFloat Type = Builtin(KindNumberFloat)
 	// Builtin concrete types.
 	Int    Type = Builtin(KindInt)
 	Float  Type = Builtin(KindFloat)
@@ -306,14 +307,20 @@ func (e *Enum) Cases() []*Case {
 	return cases
 }
 
-// MakeConcrete maps "t" to a concrete Reference if it is a compile-time only type.
-func MakeConcrete(r Reference) (Reference, error) {
+// Concrete maps "t" to a concrete Reference if it is a compile-time only type.
+func Concrete(r Reference) (Reference, error) {
 	switch r.Type() {
-	case Number:
+	case NumberInt:
 		if _, ok := r.(*Value); ok {
 			return &Value{Int}, nil
 		}
 		return Int, nil
+
+	case NumberFloat:
+		if _, ok := r.(*Value); ok {
+			return &Value{Float}, nil
+		}
+		return Float, nil
 
 	case None:
 		return nil, fmt.Errorf("can't reference \"none\"")
@@ -321,8 +328,8 @@ func MakeConcrete(r Reference) (Reference, error) {
 	return r, nil
 }
 
-// MakeOptional makes "r" into an optional (value or type).
-func MakeOptional(r Reference) Reference {
+// ToOptional makes "r" into an optional (value or type).
+func ToOptional(r Reference) Reference {
 	switch r := r.(type) {
 	case *Value:
 		return &Value{Optional(r.Type())}
@@ -341,7 +348,7 @@ func Coerce(from, to Type) Type {
 	switch {
 	case from.Coerce(To, to) != nil:
 		return to
-	
+
 	case to.Coerce(From, from) != nil:
 		return to
 	}

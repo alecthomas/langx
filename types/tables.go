@@ -47,11 +47,15 @@ var opMap = func() map[opKey]bool {
 	}
 	for _, op := range ops {
 		out[opKey{KindInt, op, KindInt}] = true
-		out[opKey{KindInt, op, KindNumber}] = true
-		out[opKey{KindNumber, op, KindInt}] = true
+		out[opKey{KindInt, op, KindNumberInt}] = true
+		out[opKey{KindInt, op, KindNumberFloat}] = true
+		out[opKey{KindNumberInt, op, KindInt}] = true
+		out[opKey{KindNumberInt, op, KindFloat}] = true
+		out[opKey{KindNumberFloat, op, KindFloat}] = true
+		out[opKey{KindNumberFloat, op, KindInt}] = true
 		out[opKey{KindFloat, op, KindFloat}] = true
-		out[opKey{KindFloat, op, KindNumber}] = true
-		out[opKey{KindNumber, op, KindFloat}] = true
+		out[opKey{KindFloat, op, KindNumberFloat}] = true
+		out[opKey{KindFloat, op, KindNumberInt}] = true
 	}
 	return out
 }()
@@ -62,8 +66,10 @@ type coercionKey struct {
 }
 
 var coercionMap = map[coercionKey]bool{
-	{KindNumber, KindInt}:   true,
-	{KindNumber, KindFloat}: true,
-	{KindFloat, KindInt}:    true,
-	{KindInt, KindFloat}:    true,
+	{KindNumberInt, KindInt}:     true,
+	{KindNumberInt, KindFloat}:   true,
+	{KindNumberFloat, KindFloat}: true,
+	{KindNumberFloat, KindInt}:   true,
+	{KindFloat, KindInt}:         true,
+	{KindInt, KindFloat}:         true,
 }

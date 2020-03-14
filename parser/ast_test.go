@@ -35,8 +35,6 @@ pub class Vector {
 			println(other.x)
 		}
 
-		go closure()
-
 		let v = Vector(1, 2, 3)
 	
 		if x > 10 {

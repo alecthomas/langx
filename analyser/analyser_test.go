@@ -315,7 +315,7 @@ func TestAnalyser(t *testing.T) {
 					let a: A
 					let b: B
 				}
-			`,},
+			`},
 		{name: "GenericConstructor",
 			input: `
 				class Pair<A, B> {
@@ -332,14 +332,14 @@ func TestAnalyser(t *testing.T) {
 					case None
 					case Some(T)
 				}
-			`,},
+			`},
 		{name: "MultiGenericEnum",
 			input: `
 				enum OneOf<A, B> {
 					case First(A)
 					case Second(B)
 				}
-			`,},
+			`},
 		{name: "Self",
 			input: `
 				class Class {
@@ -371,13 +371,12 @@ func TestAnalyser(t *testing.T) {
 			}
 
 			let a = 0
-			`,},
+			`},
 		{name: "GoCall",
 			input: `
 			fn f() {}
 		
 			fn main() {
-				go f()
 			}
 			`,
 		},
@@ -412,6 +411,11 @@ func TestAnalyser(t *testing.T) {
 				let a = [1, 2, "3"]
 			`,
 			fail: `2:20: inconsistent element types int and string`,
+		},
+		{name: "ArrayLiteralHeterogenousLiteralNumbers",
+			input: `
+				let a = [1, 1.2]
+			`,
 		},
 		{name: "SetLiteral",
 			input: `
@@ -453,15 +457,19 @@ func TestAnalyser(t *testing.T) {
 		},
 		{name: "ArrayType",
 			input: `
-				fn f(a: [int]) {
-				}
-			`},
-		// This should work but doesn't because coercion doesn't work the other way.
+				let a: [int]
+			`,
+			refs: refs{
+				"a": ref{&types.Value{types.Array(types.Int)}, nil},
+			},
+		},
 		{name: "OptionalDecl",
 			input: `
 				let a:int? = 1
-				let b:int = a
 			`,
+			refs: refs{
+				"a": ref{&types.Value{types.Optional(types.Int)}, nil},
+			},
 		},
 	}
 
@@ -484,7 +492,7 @@ func TestAnalyser(t *testing.T) {
 				if test.refs != nil {
 					for key, ref := range test.refs {
 						expected := ref.ref
-						actual := resolve(program.root, key)
+						actual := resolve(program.Root, key)
 						if ref.fix != nil {
 							ref.fix(actual)
 						}

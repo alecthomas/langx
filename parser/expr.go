@@ -20,6 +20,24 @@ type Expr struct {
 	Right *Expr
 }
 
+func (e *Expr) accept(visitor Visitor) error {
+	return visitor(e, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = Visit(e.Unary, visitor); err != nil {
+			return err
+		}
+		if err = Visit(e.Left, visitor); err != nil {
+			return err
+		}
+		if err = Visit(e.Right, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func (e *Expr) String() string {
 	if e.Unary != nil {
 		return e.Unary.String()
@@ -93,6 +111,15 @@ type Unary struct {
 	Reference *Reference `@@`
 }
 
+func (u *Unary) accept(visitor Visitor) error {
+	return visitor(u, func(err error) error {
+		if err != nil {
+			return err
+		}
+		return Visit(u.Reference, visitor)
+	})
+}
+
 func (u *Unary) String() string {
 	if u.Op != 0 {
 		return fmt.Sprintf("%s%s", u.Op.String(), u.Reference.Describe())
@@ -108,6 +135,37 @@ type Terminal struct {
 	Ident         string       `| ( @Ident`
 	TypeParameter []*Reference `    ("<" @@ ( "," @@ )* ","? ">" )?`
 	Optional      bool         `    @"?"? )`
+}
+
+func (t Terminal) accept(visitor Visitor) error {
+	return visitor(t, func(err error) error {
+		if err != nil {
+			return err
+		}
+		switch {
+		case t.Tuple != nil:
+			for _, e := range t.Tuple {
+				if err = Visit(e, visitor); err != nil {
+					return err
+				}
+			}
+
+		case t.Literal != nil:
+			return Visit(t.Literal, visitor)
+
+		case t.Ident != "":
+			for _, tp := range t.TypeParameter {
+				if err = Visit(tp, visitor); err != nil {
+					return err
+				}
+			}
+			return nil
+
+		default:
+			panic("??")
+		}
+		return nil
+	})
 }
 
 func (t Terminal) Describe() string {
@@ -131,6 +189,21 @@ type Reference struct {
 	Next     *ReferenceNext `@@?`
 }
 
+func (t *Reference) accept(visitor Visitor) error {
+	return visitor(t, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = Visit(t.Terminal, visitor); err != nil {
+			return err
+		}
+		if err = Visit(t.Next, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func (t *Reference) Describe() string {
 	description := t.Terminal.Describe()
 	if t.Next != nil {
@@ -145,6 +218,27 @@ type ReferenceNext struct {
 	Call      *Call     `  | @@ )`
 
 	Next *ReferenceNext `@@?`
+}
+
+func (r *ReferenceNext) accept(visitor Visitor) error {
+	return visitor(r, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = Visit(r.Subscript, visitor); err != nil {
+			return err
+		}
+		if err = Visit(r.Reference, visitor); err != nil {
+			return err
+		}
+		if err = Visit(r.Call, visitor); err != nil {
+			return err
+		}
+		if err = Visit(r.Next, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (r *ReferenceNext) Describe() string {
@@ -192,6 +286,33 @@ type Literal struct {
 	Array     *ArrayLiteral     `| @@`
 }
 
+func (l *Literal) accept(visitor Visitor) error {
+	return visitor(l, func(err error) error {
+		if err != nil {
+			return err
+		}
+		switch {
+		case l.Number != nil:
+			return nil
+
+		case l.Str != nil:
+			return nil
+
+		case l.Bool != nil:
+			return nil
+
+		case l.DictOrSet != nil:
+			return Visit(l.DictOrSet, visitor)
+
+		case l.Array != nil:
+			return Visit(l.Array, visitor)
+
+		default:
+			panic("??")
+		}
+	})
+}
+
 func (l *Literal) Describe() string {
 	switch {
 	case l.Number != nil:
@@ -223,6 +344,20 @@ type DictOrSetLiteral struct {
 	Entries []*DictOrSetEntryLiteral `"{" @@ ( "," @@ )* ","? "}"`
 }
 
+func (d DictOrSetLiteral) accept(visitor Visitor) error {
+	return visitor(d, func(err error) error {
+		if err != nil {
+			return err
+		}
+		for _, entry := range d.Entries {
+			if err = Visit(entry, visitor); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // DictOrSetEntryLiteral in the form {"key0": 1, "key1": 2} or {1, 2, 3}
 type DictOrSetEntryLiteral struct {
 	Pos lexer.Position
@@ -233,11 +368,40 @@ type DictOrSetEntryLiteral struct {
 	Value *Expr `( ":" @@ )?`
 }
 
+func (d DictOrSetEntryLiteral) accept(visitor Visitor) error {
+	return visitor(d, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = Visit(d.Key, visitor); err != nil {
+			return err
+		}
+		if err = Visit(d.Value, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 // ArrayLiteral in the form [1, 2, 3]
 type ArrayLiteral struct {
 	Pos lexer.Position
 
 	Values []*Expr `"[" ( @@ ( "," @@ )* )? ","? "]"`
+}
+
+func (a ArrayLiteral) accept(visitor Visitor) error {
+	return visitor(a, func(err error) error {
+		if err != nil {
+			return err
+		}
+		for _, v := range a.Values {
+			if err = Visit(v, visitor); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ClassLiteral in the form {field:value, field:value, ...)
@@ -260,6 +424,20 @@ type Call struct {
 	Pos lexer.Position
 
 	Parameters []*Expr `"(" ( @@ ( "," @@ )* )? ","? ")"`
+}
+
+func (c Call) accept(visitor Visitor) error {
+	return visitor(c, func(err error) error {
+		if err != nil {
+			return err
+		}
+		for _, p := range c.Parameters {
+			if err = Visit(p, visitor); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func peekPos(lex *lexer.PeekingLexer) lexer.Position {
