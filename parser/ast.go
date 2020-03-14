@@ -40,27 +40,6 @@ var (
 	operatorToken = lex.Symbols()["Operator"]
 )
 
-// A Node in the AST.
-type Node interface {
-	accept(visitor Visitor) error
-}
-
-// Next should be called by Visitor to proceed with the walk.
-//
-// The walk will terminate if "err" is non-nil.
-type Next func(err error) error
-
-// Visitor can be used to walk all nodes in the model.
-type Visitor func(node Node, next Next) error
-
-// Visit all nodes.
-func Visit(node Node, visit Visitor) error {
-	if node == nil {
-		return nil
-	}
-	return node.accept(visit)
-}
-
 // Decls is a group of declarations.
 type Decls interface {
 	Decls() []Decl
@@ -72,13 +51,13 @@ type AST struct {
 	Declarations []*RootDecl `@@*`
 }
 
-func (a *AST) accept(visitor Visitor) error {
+func (a *AST) accept(visitor VisitorFunc) error {
 	return visitor(a, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, decl := range a.Declarations {
-			err = Visit(decl, visitor)
+			err = VisitFunc(decl, visitor)
 			if err != nil {
 				return err
 			}
@@ -108,12 +87,12 @@ type RootDecl struct {
 	Func   *FuncDecl   `  | @@ ";"? ) `
 }
 
-func (r *RootDecl) accept(visitor Visitor) error {
+func (r *RootDecl) accept(visitor VisitorFunc) error {
 	return visitor(r, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(r.Decl(), visitor)
+		return VisitFunc(r.Decl(), visitor)
 	})
 }
 
@@ -146,7 +125,7 @@ type ImportDecl struct {
 	Import string `@String`
 }
 
-func (i *ImportDecl) accept(visitor Visitor) error {
+func (i *ImportDecl) accept(visitor VisitorFunc) error {
 	return visitor(i, func(err error) error { return err })
 }
 
@@ -159,16 +138,16 @@ type EnumDecl struct {
 	Members []*EnumMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (e *EnumDecl) accept(visitor Visitor) error {
+func (e *EnumDecl) accept(visitor VisitorFunc) error {
 	return visitor(e, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(e.Type, visitor); err != nil {
+		if err = VisitFunc(e.Type, visitor); err != nil {
 			return err
 		}
 		for _, m := range e.Members {
-			if err = Visit(m, visitor); err != nil {
+			if err = VisitFunc(m, visitor); err != nil {
 				return err
 			}
 		}
@@ -199,12 +178,12 @@ type EnumMember struct {
 	InitialiserDecl *InitialiserDecl ` | @@ )`
 }
 
-func (e *EnumMember) accept(visitor Visitor) error {
+func (e *EnumMember) accept(visitor VisitorFunc) error {
 	return visitor(e, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(e.Decl(), visitor)
+		return VisitFunc(e.Decl(), visitor)
 	})
 }
 
@@ -243,12 +222,12 @@ type CaseDecl struct {
 	Type *TypeDecl `( "(" @@ ")" )?`
 }
 
-func (c *CaseDecl) accept(visitor Visitor) error {
+func (c *CaseDecl) accept(visitor VisitorFunc) error {
 	return visitor(c, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(c.Type, visitor)
+		return VisitFunc(c.Type, visitor)
 	})
 }
 
@@ -261,16 +240,16 @@ type ClassDecl struct {
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (c *ClassDecl) accept(visitor Visitor) error {
+func (c *ClassDecl) accept(visitor VisitorFunc) error {
 	return visitor(c, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err := Visit(c.Type, visitor); err != nil {
+		if err := VisitFunc(c.Type, visitor); err != nil {
 			return err
 		}
 		for _, member := range c.Members {
-			if err := Visit(member, visitor); err != nil {
+			if err := VisitFunc(member, visitor); err != nil {
 				return err
 			}
 		}
@@ -300,12 +279,12 @@ type ClassMember struct {
 	InitialiserDecl *InitialiserDecl ` | @@ )`
 }
 
-func (c *ClassMember) accept(visitor Visitor) error {
+func (c *ClassMember) accept(visitor VisitorFunc) error {
 	return visitor(c, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(c.Decl(), visitor)
+		return VisitFunc(c.Decl(), visitor)
 	})
 }
 
@@ -339,17 +318,17 @@ type InitialiserDecl struct {
 	Body       *Block        `@@`
 }
 
-func (i *InitialiserDecl) accept(visitor Visitor) error {
+func (i *InitialiserDecl) accept(visitor VisitorFunc) error {
 	return visitor(i, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, p := range i.Parameters {
-			if err = Visit(p, visitor); err != nil {
+			if err = VisitFunc(p, visitor); err != nil {
 				return err
 			}
 		}
-		return Visit(i.Body, visitor)
+		return VisitFunc(i.Body, visitor)
 	})
 }
 
@@ -362,13 +341,13 @@ type TypeDecl struct {
 	TypeParameter []*TypeParamDecl `( "<" @@ ( "," @@ )* ","? ">" )?`
 }
 
-func (t TypeDecl) accept(visitor Visitor) error {
+func (t TypeDecl) accept(visitor VisitorFunc) error {
 	return visitor(t, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, tp := range t.TypeParameter {
-			if err = Visit(tp, visitor); err != nil {
+			if err = VisitFunc(tp, visitor); err != nil {
 				return err
 			}
 		}
@@ -383,13 +362,13 @@ type TypeParamDecl struct {
 	Constraints []*Reference `( ":" @@ ( "," @@ )* )?`
 }
 
-func (t TypeParamDecl) accept(visitor Visitor) error {
+func (t TypeParamDecl) accept(visitor VisitorFunc) error {
 	return visitor(t, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, c := range t.Constraints {
-			if err = Visit(c, visitor); err != nil {
+			if err = VisitFunc(c, visitor); err != nil {
 				return err
 			}
 		}
@@ -404,12 +383,12 @@ type Parameters struct {
 	Type  *Reference `":" @@`
 }
 
-func (p Parameters) accept(visitor Visitor) error {
+func (p Parameters) accept(visitor VisitorFunc) error {
 	return visitor(p, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(p.Type, visitor)
+		return VisitFunc(p.Type, visitor)
 	})
 }
 
@@ -422,13 +401,13 @@ type VarDecl struct {
 	Vars []*VarDeclAsgn `"let" @@ ( "," @@ )*`
 }
 
-func (v *VarDecl) accept(visitor Visitor) error {
+func (v *VarDecl) accept(visitor VisitorFunc) error {
 	return visitor(v, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, v := range v.Vars {
-			if err = Visit(v, visitor); err != nil {
+			if err = VisitFunc(v, visitor); err != nil {
 				return err
 			}
 		}
@@ -446,15 +425,15 @@ type VarDeclAsgn struct {
 	Default *Expr      `( "=" @@ )?`
 }
 
-func (v VarDeclAsgn) accept(visitor Visitor) error {
+func (v VarDeclAsgn) accept(visitor VisitorFunc) error {
 	return visitor(v, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(v.Type, visitor); err != nil {
+		if err = VisitFunc(v.Type, visitor); err != nil {
 			return err
 		}
-		return Visit(v.Default, visitor)
+		return VisitFunc(v.Default, visitor)
 	})
 }
 
@@ -475,32 +454,32 @@ type Stmt struct {
 	Expression *Expr `| @@`
 }
 
-func (s Stmt) accept(visitor Visitor) error {
+func (s Stmt) accept(visitor VisitorFunc) error {
 	return visitor(s, func(err error) error {
 		if err != nil {
 			return err
 		}
 		switch {
 		case s.Return != nil:
-			return Visit(s.Return, visitor)
+			return VisitFunc(s.Return, visitor)
 		case s.If != nil:
-			return Visit(s.If, visitor)
+			return VisitFunc(s.If, visitor)
 		case s.For != nil:
-			return Visit(s.For, visitor)
+			return VisitFunc(s.For, visitor)
 		case s.Switch != nil:
-			return Visit(s.Switch, visitor)
+			return VisitFunc(s.Switch, visitor)
 		case s.Block != nil:
-			return Visit(s.Block, visitor)
+			return VisitFunc(s.Block, visitor)
 		case s.VarDecl != nil:
-			return Visit(s.VarDecl, visitor)
+			return VisitFunc(s.VarDecl, visitor)
 		case s.FuncDecl != nil:
-			return Visit(s.FuncDecl, visitor)
+			return VisitFunc(s.FuncDecl, visitor)
 		case s.ClassDecl != nil:
-			return Visit(s.ClassDecl, visitor)
+			return VisitFunc(s.ClassDecl, visitor)
 		case s.EnumDecl != nil:
-			return Visit(s.EnumDecl, visitor)
+			return VisitFunc(s.EnumDecl, visitor)
 		case s.Expression != nil:
-			return Visit(s.Expression, visitor)
+			return VisitFunc(s.Expression, visitor)
 		default:
 			panic("??")
 		}
@@ -513,13 +492,13 @@ type Block struct {
 	Statements []*Stmt `"{" ( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (b Block) accept(visitor Visitor) error {
+func (b Block) accept(visitor VisitorFunc) error {
 	return visitor(b, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, stmt := range b.Statements {
-			if err = Visit(stmt, visitor); err != nil {
+			if err = VisitFunc(stmt, visitor); err != nil {
 				return err
 			}
 		}
@@ -535,18 +514,18 @@ type ForStmt struct {
 	Body   *Block     `@@`
 }
 
-func (i ForStmt) accept(visitor Visitor) error {
+func (i ForStmt) accept(visitor VisitorFunc) error {
 	return visitor(i, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(i.Target, visitor); err != nil {
+		if err = VisitFunc(i.Target, visitor); err != nil {
 			return err
 		}
-		if err = Visit(i.Source, visitor); err != nil {
+		if err = VisitFunc(i.Source, visitor); err != nil {
 			return err
 		}
-		if err = Visit(i.Body, visitor); err != nil {
+		if err = VisitFunc(i.Body, visitor); err != nil {
 			return err
 		}
 		return nil
@@ -561,18 +540,18 @@ type IfStmt struct {
 	Else      *Block `( "else" @@ )?`
 }
 
-func (i IfStmt) accept(visitor Visitor) error {
+func (i IfStmt) accept(visitor VisitorFunc) error {
 	return visitor(i, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(i.Condition, visitor); err != nil {
+		if err = VisitFunc(i.Condition, visitor); err != nil {
 			return err
 		}
-		if err = Visit(i.Main, visitor); err != nil {
+		if err = VisitFunc(i.Main, visitor); err != nil {
 			return err
 		}
-		if err = Visit(i.Else, visitor); err != nil {
+		if err = VisitFunc(i.Else, visitor); err != nil {
 			return err
 		}
 		return nil
@@ -586,16 +565,16 @@ type SwitchStmt struct {
 	Cases  []*CaseStmt `@@* "}"`
 }
 
-func (s SwitchStmt) accept(visitor Visitor) error {
+func (s SwitchStmt) accept(visitor VisitorFunc) error {
 	return visitor(s, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(s.Target, visitor); err != nil {
+		if err = VisitFunc(s.Target, visitor); err != nil {
 			return err
 		}
 		for _, c := range s.Cases {
-			if err = Visit(c, visitor); err != nil {
+			if err = VisitFunc(c, visitor); err != nil {
 				return err
 			}
 		}
@@ -611,16 +590,16 @@ type CaseStmt struct {
 	Body    []*Stmt     `( @@ ( ";" @@ )* ";"? )?`
 }
 
-func (c CaseStmt) accept(visitor Visitor) error {
+func (c CaseStmt) accept(visitor VisitorFunc) error {
 	return visitor(c, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(c.Case, visitor); err != nil {
+		if err = VisitFunc(c.Case, visitor); err != nil {
 			return err
 		}
 		for _, stmt := range c.Body {
-			if err = Visit(stmt, visitor); err != nil {
+			if err = VisitFunc(stmt, visitor); err != nil {
 				return err
 			}
 		}
@@ -635,15 +614,15 @@ type CaseSelect struct {
 	ExprCase *Expr     `| @@`
 }
 
-func (c CaseSelect) accept(visitor Visitor) error {
+func (c CaseSelect) accept(visitor VisitorFunc) error {
 	return visitor(c, func(err error) error {
 		if err != nil {
 			return err
 		}
-		if err = Visit(c.EnumCase, visitor); err != nil {
+		if err = VisitFunc(c.EnumCase, visitor); err != nil {
 			return err
 		}
-		return Visit(c.ExprCase, visitor)
+		return VisitFunc(c.ExprCase, visitor)
 	})
 }
 
@@ -654,7 +633,7 @@ type EnumCase struct {
 	Var  string `( "(" @Ident ")" )?`
 }
 
-func (e EnumCase) accept(visitor Visitor) error {
+func (e EnumCase) accept(visitor VisitorFunc) error {
 	return visitor(e, func(err error) error { return err })
 }
 
@@ -664,12 +643,12 @@ type ReturnStmt struct {
 	Value *Expr `"return" @@?`
 }
 
-func (r ReturnStmt) accept(visitor Visitor) error {
+func (r ReturnStmt) accept(visitor VisitorFunc) error {
 	return visitor(r, func(err error) error {
 		if err != nil {
 			return err
 		}
-		return Visit(r.Value, visitor)
+		return VisitFunc(r.Value, visitor)
 	})
 }
 
@@ -683,20 +662,20 @@ type FuncDecl struct {
 	Body       *Block        `@@`
 }
 
-func (f *FuncDecl) accept(visitor Visitor) error {
+func (f *FuncDecl) accept(visitor VisitorFunc) error {
 	return visitor(f, func(err error) error {
 		if err != nil {
 			return err
 		}
 		for _, p := range f.Parameters {
-			if err = Visit(p, visitor); err != nil {
+			if err = VisitFunc(p, visitor); err != nil {
 				return err
 			}
 		}
-		if err = Visit(f.Return, visitor); err != nil {
+		if err = VisitFunc(f.Return, visitor); err != nil {
 			return err
 		}
-		return Visit(f.Body, visitor)
+		return VisitFunc(f.Body, visitor)
 	})
 }
 
