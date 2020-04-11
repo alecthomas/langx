@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
@@ -135,8 +137,8 @@ func (i *ImportDecl) decl() {}
 type EnumDecl struct {
 	Pos lexer.Position
 
-	Type    *TypeDecl     `"enum" @@ "{"`
-	Members []*EnumMember `( @@ ( ";" @@ )* ";"? )? "}"`
+	Type    *NamedTypeDecl `"enum" @@ "{"`
+	Members []*EnumMember  `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
 func (e *EnumDecl) accept(visitor VisitorFunc) error {
@@ -237,7 +239,7 @@ func (c *CaseDecl) decl() {}
 type ClassDecl struct {
 	Pos lexer.Position
 
-	Type    *TypeDecl      `"class" @@ "{"`
+	Type    *NamedTypeDecl `"class" @@ "{"`
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
@@ -338,11 +340,113 @@ func (i *InitialiserDecl) decl() {}
 type TypeDecl struct {
 	Pos lexer.Position
 
+	Named     *NamedTypeDecl     `  @@`
+	Array     *ArrayTypeDecl     `| @@`
+	DictOrSet *DictOrSetTypeDecl `| @@`
+}
+
+func (t *TypeDecl) String() string {
+	switch {
+	case t.Named != nil:
+		return t.Named.String()
+	case t.Array != nil:
+		return t.Array.String()
+	case t.DictOrSet != nil:
+		return t.DictOrSet.String()
+	default:
+		panic("??")
+	}
+}
+
+func (t TypeDecl) accept(visitor VisitorFunc) error {
+	return visitor(t, func(err error) error {
+		if err != nil {
+			return err
+		}
+		switch {
+		case t.Named != nil:
+			return t.Named.accept(visitor)
+
+		default:
+			panic("??")
+		}
+	})
+}
+
+// DictOrSeyTypeDecl in the form {<type>: <type>} or {<type>}
+type DictOrSetTypeDecl struct {
+	Pos lexer.Position
+
+	Key *TypeDecl `"{" @@`
+	// Dicts and sets both use "{}" as delimiters, so we'll allow intermingling
+	// of key:value and value, then resolve during semantic analysis.
+	Value *TypeDecl `( ":" @@ )? "}"`
+}
+
+func (d *DictOrSetTypeDecl) String() string {
+	if d.Value == nil {
+		return fmt.Sprintf("{%s}", d.Key)
+	}
+	return fmt.Sprintf("{%s: %s}", d.Key, d.Value)
+}
+
+func (d *DictOrSetTypeDecl) accept(visitor VisitorFunc) error {
+	return visitor(d, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = VisitFunc(d.Key, visitor); err != nil {
+			return err
+		}
+		if err = VisitFunc(d.Value, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// ArrayTypeDecl in the form [<type>]
+type ArrayTypeDecl struct {
+	Pos lexer.Position
+
+	Element *TypeDecl `"[" @@ "]"`
+}
+
+func (a *ArrayTypeDecl) String() string {
+	return fmt.Sprintf("[%s]", a.Element)
+}
+
+func (a *ArrayTypeDecl) accept(visitor VisitorFunc) error {
+	return visitor(a, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = VisitFunc(a.Element, visitor); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+type NamedTypeDecl struct {
+	Pos lexer.Position
+
 	Type          string           `@Ident`
 	TypeParameter []*TypeParamDecl `( "<" @@ ( "," @@ )* ","? ">" )?`
 }
 
-func (t TypeDecl) accept(visitor VisitorFunc) error {
+func (n *NamedTypeDecl) String() string {
+	params := []string{}
+	for _, p := range n.TypeParameter {
+		params = append(params, p.String())
+	}
+	if len(params) == 0 {
+		return n.Type
+	}
+	return fmt.Sprintf("%s<%s>", n.Type, strings.Join(params, ", "))
+}
+
+func (t *NamedTypeDecl) accept(visitor VisitorFunc) error {
 	return visitor(t, func(err error) error {
 		if err != nil {
 			return err
@@ -376,6 +480,17 @@ func (t TypeParamDecl) accept(visitor VisitorFunc) error {
 		}
 		return nil
 	})
+}
+
+func (t TypeParamDecl) String() string {
+	constraints := []string{}
+	for _, c := range t.Constraints {
+		constraints = append(constraints, c.Describe())
+	}
+	if len(constraints) == 0 {
+		return t.Name
+	}
+	return fmt.Sprintf("%s: %s", t.Name, strings.Join(constraints, ", "))
 }
 
 // Parameters of a function/constructor declaration.

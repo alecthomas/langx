@@ -147,7 +147,7 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	return nil
 }
 
-func (a *analyser) declGenericParameters(scope *Scope, t *parser.TypeDecl) error {
+func (a *analyser) declGenericParameters(scope *Scope, t *parser.NamedTypeDecl) error {
 	for _, gp := range t.TypeParameter {
 		// TODO: Constraints
 		ref := types.Generic{}
@@ -192,11 +192,35 @@ func (a *analyser) resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.
 }
 
 func (a *analyser) resolveType(scope *Scope, cse *parser.TypeDecl) (types.Type, error) {
-	typ := scope.ResolveType(cse.Type)
-	if typ == nil {
-		return nil, participle.Errorf(cse.Pos, "unknown type %q", cse.Type)
+	switch {
+	case cse.Named != nil:
+		return scope.ResolveType(cse.Named.Type), nil
+
+	case cse.Array != nil:
+		el, err := a.resolveType(scope, cse.Array.Element)
+		if err != nil {
+			return nil, err
+		}
+		return types.Array(el), nil
+
+	case cse.DictOrSet != nil:
+		key, err := a.resolveType(scope, cse.DictOrSet.Key)
+		if err != nil {
+			return nil, err
+		}
+		// Dict
+		if cse.DictOrSet.Value != nil {
+			value, err := a.resolveType(scope, cse.DictOrSet.Value)
+			if err != nil {
+				return nil, err
+			}
+			return types.Map(key, value), nil
+		}
+		return types.Set(key), nil
+
+	default:
+		return nil, participle.Errorf(cse.Pos, "unknown type %q", cse)
 	}
-	return typ, nil
 }
 
 func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {

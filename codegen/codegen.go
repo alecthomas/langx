@@ -19,7 +19,7 @@ func Generate(w io.Writer, program *analyser.Program) error {
 				name: "Option",
 				typ:  types.Optional(types.Generic{}),
 				body: &parser.EnumDecl{
-					Type: &parser.TypeDecl{
+					Type: &parser.NamedTypeDecl{
 						Type: "Option",
 						TypeParameter: []*parser.TypeParamDecl{
 							{Name: "T"},
@@ -27,7 +27,8 @@ func Generate(w io.Writer, program *analyser.Program) error {
 					},
 					Members: []*parser.EnumMember{
 						{CaseDecl: &parser.CaseDecl{Name: "None"}},
-						{CaseDecl: &parser.CaseDecl{Name: "Some", Type: &parser.TypeDecl{Type: "T"}}},
+						{CaseDecl: &parser.CaseDecl{Name: "Some", Type: &parser.TypeDecl{
+							Named: &parser.NamedTypeDecl{Type: "T"}}}},
 					},
 				},
 			},
@@ -46,6 +47,22 @@ type generator struct {
 	io.Writer
 	generics map[string]generic
 	p        *analyser.Program
+}
+
+func (g *generator) VisitArrayTypeDecl(n *parser.ArrayTypeDecl) error {
+	panic("implement me")
+}
+
+func (g *generator) VisitDictOrSetTypeDecl(n *parser.DictOrSetTypeDecl) error {
+	panic("implement me")
+}
+
+func (g *generator) VisitNamedTypeDecl(n *parser.NamedTypeDecl) error {
+	fmt.Fprintf(g, "%s", n.Type)
+	if len(n.TypeParameter) > 0 {
+		panic("generics not supported")
+	}
+	return parser.TerminateRecursion
 }
 
 func (g *generator) VisitAST(n *parser.AST) error { return nil }
@@ -249,9 +266,11 @@ func (g *generator) VisitTerminal(n parser.Terminal) error {
 }
 
 func (g *generator) VisitTypeDecl(n parser.TypeDecl) error {
-	fmt.Fprintf(g, "%s", n.Type)
-	if len(n.TypeParameter) > 0 {
-		panic("generics not supported")
+	switch {
+	case n.Named != nil:
+		return g.VisitNamedTypeDecl(n.Named)
+	default:
+		panic("??")
 	}
 	return parser.TerminateRecursion
 }

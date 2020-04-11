@@ -62,6 +62,9 @@ type Visitor interface {
 	VisitSwitchStmt(n SwitchStmt) error
 	VisitTerminal(n Terminal) error
 	VisitTypeDecl(n TypeDecl) error
+	VisitArrayTypeDecl(n *ArrayTypeDecl) error
+	VisitDictOrSetTypeDecl(n *DictOrSetTypeDecl) error
+	VisitNamedTypeDecl(n *NamedTypeDecl) error
 	VisitTypeParamDecl(n TypeParamDecl) error
 	VisitUnary(n *Unary) error
 	VisitVarDecl(n *VarDecl) error
@@ -103,6 +106,9 @@ func (d DefaultVisitor) VisitStmt(n Stmt) error                                 
 func (d DefaultVisitor) VisitSwitchStmt(n SwitchStmt) error                       { return nil }
 func (d DefaultVisitor) VisitTerminal(n Terminal) error                           { return nil }
 func (d DefaultVisitor) VisitTypeDecl(n TypeDecl) error                           { return nil }
+func (d DefaultVisitor) VisitArrayTypeDecl(n *ArrayTypeDecl) error                { return nil }
+func (d DefaultVisitor) VisitDictOrSetTypeDecl(n *DictOrSetTypeDecl) error        { return nil }
+func (d DefaultVisitor) VisitNamedTypeDecl(n *NamedTypeDecl) error                { return nil }
 func (d DefaultVisitor) VisitTypeParamDecl(n TypeParamDecl) error                 { return nil }
 func (d DefaultVisitor) VisitUnary(n *Unary) error                                { return nil }
 func (d DefaultVisitor) VisitVarDecl(n *VarDecl) error                            { return nil }
@@ -176,6 +182,12 @@ func Visit(node Node, visitor Visitor) error {
 			return maybeNext(visitor.VisitSwitchStmt(n))
 		case TypeDecl:
 			return maybeNext(visitor.VisitTypeDecl(n))
+		case *NamedTypeDecl:
+			return maybeNext(visitor.VisitNamedTypeDecl(n))
+		case *ArrayTypeDecl:
+			return maybeNext(visitor.VisitArrayTypeDecl(n))
+		case *DictOrSetTypeDecl:
+			return maybeNext(visitor.VisitDictOrSetTypeDecl(n))
 		case *Unary:
 			return maybeNext(visitor.VisitUnary(n))
 		case VarDeclAsgn:
