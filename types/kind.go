@@ -15,7 +15,6 @@ const (
 	KindBool        // bool
 	KindInt         // int
 	KindFloat       // float
-	KindChan        // chan
 	KindTuple       // tuple
 	KindClass       // class
 	KindEnum        // enum
@@ -23,9 +22,10 @@ const (
 	KindAlias       // alias
 )
 
+// IsScalar returns true if the type is a scalar (string, bool, int, float).
 func (i Kind) IsScalar() bool {
 	switch i {
-	case KindString, KindBool, KindInt, KindFloat, KindChan:
+	case KindString, KindBool, KindInt, KindFloat:
 		return true
 	}
 	return false

@@ -1,5 +1,10 @@
 package parser
 
+import (
+	"errors"
+	"reflect"
+)
+
 // go-sumtype:decl Node
 
 // A Node in the AST.
@@ -24,6 +29,8 @@ func VisitFunc(node Node, visit VisitorFunc) error {
 }
 
 // Visitor type-safe interface.
+//
+// Any method may return TerminateRecursion to stop recursion but continue with traversal.
 type Visitor interface {
 	VisitAST(n *AST) error
 	VisitArrayLiteral(n ArrayLiteral) error
@@ -34,7 +41,6 @@ type Visitor interface {
 	VisitCaseStmt(n CaseStmt) error
 	VisitClassDecl(n *ClassDecl) error
 	VisitClassMember(n *ClassMember) error
-	VisitDecl(n Decl) error
 	VisitDictOrSetEntryLiteral(n DictOrSetEntryLiteral) error
 	VisitDictOrSetLiteral(n DictOrSetLiteral) error
 	VisitEnumCase(n EnumCase) error
@@ -76,7 +82,6 @@ func (d DefaultVisitor) VisitCaseSelect(n CaseSelect) error                     
 func (d DefaultVisitor) VisitCaseStmt(n CaseStmt) error                           { return nil }
 func (d DefaultVisitor) VisitClassDecl(n *ClassDecl) error                        { return nil }
 func (d DefaultVisitor) VisitClassMember(n *ClassMember) error                    { return nil }
-func (d DefaultVisitor) VisitDecl(n Decl) error                                   { return nil }
 func (d DefaultVisitor) VisitDictOrSetEntryLiteral(n DictOrSetEntryLiteral) error { return nil }
 func (d DefaultVisitor) VisitDictOrSetLiteral(n DictOrSetLiteral) error           { return nil }
 func (d DefaultVisitor) VisitEnumCase(n EnumCase) error                           { return nil }
@@ -103,80 +108,92 @@ func (d DefaultVisitor) VisitUnary(n *Unary) error                              
 func (d DefaultVisitor) VisitVarDecl(n *VarDecl) error                            { return nil }
 func (d DefaultVisitor) VisitVarDeclAsgn(n VarDeclAsgn) error                     { return nil }
 
+// TerminateRecursion should be returned by Visitor methods to terminate recursion.
+var TerminateRecursion = errors.New("no recurse")
+
 // Visit walks the AST calling the corresponding method on "visitor" for each AST node type.
 func Visit(node Node, visitor Visitor) error {
 	return VisitFunc(node, func(node Node, next Next) error {
+		if node == nil || (reflect.ValueOf(node).Kind() == reflect.Ptr && reflect.ValueOf(node).IsNil()) {
+			return nil
+		}
+		maybeNext := func(err error) error {
+			if err == TerminateRecursion {
+				return nil
+			}
+			return next(err)
+		}
 		switch n := node.(type) {
+		case nil:
+			return nil
 		case *AST:
-			return next(visitor.VisitAST(n))
+			return maybeNext(visitor.VisitAST(n))
 		case ArrayLiteral:
-			return next(visitor.VisitArrayLiteral(n))
+			return maybeNext(visitor.VisitArrayLiteral(n))
 		case Block:
-			return next(visitor.VisitBlock(n))
+			return maybeNext(visitor.VisitBlock(n))
 		case Call:
-			return next(visitor.VisitCall(n))
+			return maybeNext(visitor.VisitCall(n))
 		case *CaseDecl:
-			return next(visitor.VisitCaseDecl(n))
+			return maybeNext(visitor.VisitCaseDecl(n))
 		case CaseSelect:
-			return next(visitor.VisitCaseSelect(n))
+			return maybeNext(visitor.VisitCaseSelect(n))
 		case CaseStmt:
-			return next(visitor.VisitCaseStmt(n))
+			return maybeNext(visitor.VisitCaseStmt(n))
 		case *ClassDecl:
-			return next(visitor.VisitClassDecl(n))
+			return maybeNext(visitor.VisitClassDecl(n))
 		case *ClassMember:
-			return next(visitor.VisitClassMember(n))
-		case Decl:
-			return next(visitor.VisitDecl(n))
+			return maybeNext(visitor.VisitClassMember(n))
 		case DictOrSetEntryLiteral:
-			return next(visitor.VisitDictOrSetEntryLiteral(n))
+			return maybeNext(visitor.VisitDictOrSetEntryLiteral(n))
 		case DictOrSetLiteral:
-			return next(visitor.VisitDictOrSetLiteral(n))
+			return maybeNext(visitor.VisitDictOrSetLiteral(n))
 		case EnumCase:
-			return next(visitor.VisitEnumCase(n))
+			return maybeNext(visitor.VisitEnumCase(n))
 		case *EnumDecl:
-			return next(visitor.VisitEnumDecl(n))
+			return maybeNext(visitor.VisitEnumDecl(n))
 		case *EnumMember:
-			return next(visitor.VisitEnumMember(n))
+			return maybeNext(visitor.VisitEnumMember(n))
 		case *Expr:
-			return next(visitor.VisitExpr(n))
+			return maybeNext(visitor.VisitExpr(n))
 		case ForStmt:
-			return next(visitor.VisitForStmt(n))
+			return maybeNext(visitor.VisitForStmt(n))
 		case *FuncDecl:
-			return next(visitor.VisitFuncDecl(n))
+			return maybeNext(visitor.VisitFuncDecl(n))
 		case IfStmt:
-			return next(visitor.VisitIfStmt(n))
+			return maybeNext(visitor.VisitIfStmt(n))
 		case *ImportDecl:
-			return next(visitor.VisitImportDecl(n))
+			return maybeNext(visitor.VisitImportDecl(n))
 		case *InitialiserDecl:
-			return next(visitor.VisitInitialiserDecl(n))
+			return maybeNext(visitor.VisitInitialiserDecl(n))
 		case Parameters:
-			return next(visitor.VisitParameters(n))
+			return maybeNext(visitor.VisitParameters(n))
 		case *ReferenceNext:
-			return next(visitor.VisitReferenceNext(n))
+			return maybeNext(visitor.VisitReferenceNext(n))
 		case *RootDecl:
-			return next(visitor.VisitRootDecl(n))
+			return maybeNext(visitor.VisitRootDecl(n))
 		case SwitchStmt:
-			return next(visitor.VisitSwitchStmt(n))
+			return maybeNext(visitor.VisitSwitchStmt(n))
 		case TypeDecl:
-			return next(visitor.VisitTypeDecl(n))
+			return maybeNext(visitor.VisitTypeDecl(n))
 		case *Unary:
-			return next(visitor.VisitUnary(n))
+			return maybeNext(visitor.VisitUnary(n))
 		case VarDeclAsgn:
-			return next(visitor.VisitVarDeclAsgn(n))
+			return maybeNext(visitor.VisitVarDeclAsgn(n))
 		case *Literal:
-			return next(visitor.VisitLiteral(n))
+			return maybeNext(visitor.VisitLiteral(n))
 		case *Reference:
-			return next(visitor.VisitReference(n))
+			return maybeNext(visitor.VisitReference(n))
 		case ReturnStmt:
-			return next(visitor.VisitReturnStmt(n))
+			return maybeNext(visitor.VisitReturnStmt(n))
 		case Stmt:
-			return next(visitor.VisitStmt(n))
+			return maybeNext(visitor.VisitStmt(n))
 		case Terminal:
-			return next(visitor.VisitTerminal(n))
+			return maybeNext(visitor.VisitTerminal(n))
 		case TypeParamDecl:
-			return next(visitor.VisitTypeParamDecl(n))
+			return maybeNext(visitor.VisitTypeParamDecl(n))
 		case *VarDecl:
-			return next(visitor.VisitVarDecl(n))
+			return maybeNext(visitor.VisitVarDecl(n))
 		default:
 			panic("??")
 		}

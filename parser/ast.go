@@ -19,6 +19,7 @@ var (
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
+		LiteralString = ` + "`[^`]*`" + `
 		Newline = \n
 		Operator = ->|%=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!]
 		Punct = []` + "`" + `~[()@#${}:;?.,]
@@ -26,12 +27,12 @@ var (
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
-		participle.Unquote(),
+		participle.Unquote("String", "LiteralString"),
 	)
 	unaryParser = participle.MustBuild(&Unary{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
-		participle.Unquote(),
+		participle.Unquote("String", "LiteralString"),
 	)
 
 	identToken    = lex.Symbols()["Ident"]
@@ -355,6 +356,7 @@ func (t TypeDecl) accept(visitor VisitorFunc) error {
 	})
 }
 
+// TypeParamDecl represents a generic type parameter and its optional constraints.
 type TypeParamDecl struct {
 	Pos lexer.Position
 
@@ -376,6 +378,7 @@ func (t TypeParamDecl) accept(visitor VisitorFunc) error {
 	})
 }
 
+// Parameters of a function/constructor declaration.
 type Parameters struct {
 	Pos lexer.Position
 
@@ -392,6 +395,7 @@ func (p Parameters) accept(visitor VisitorFunc) error {
 	})
 }
 
+// VarDecl represents the declaration of new variables.
 type VarDecl struct {
 	Pos lexer.Position
 

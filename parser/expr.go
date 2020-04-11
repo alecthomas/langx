@@ -25,8 +25,8 @@ func (e *Expr) accept(visitor VisitorFunc) error {
 		if err != nil {
 			return err
 		}
-		if err = VisitFunc(e.Unary, visitor); err != nil {
-			return err
+		if e.Unary != nil {
+			return VisitFunc(e.Unary, visitor)
 		}
 		if err = VisitFunc(e.Left, visitor); err != nil {
 			return err
@@ -182,6 +182,7 @@ func (t Terminal) Describe() string {
 	panic("??")
 }
 
+// A Reference to a value or a type.
 type Reference struct {
 	Pos lexer.Position
 
@@ -264,7 +265,11 @@ func (r *ReferenceNext) Describe() string {
 type Number big.Float
 
 func (n *Number) GoString() string {
-	return fmt.Sprintf("parser.Number(%s)", (*big.Float)(n).String())
+	return fmt.Sprintf("parser.Number(%s)", n.String())
+}
+
+func (n *Number) String() string {
+	return (*big.Float)(n).String()
 }
 
 func (n *Number) Capture(values []string) error {

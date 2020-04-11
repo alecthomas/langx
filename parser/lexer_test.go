@@ -18,6 +18,7 @@ func TestLexer(t *testing.T) {
 		}
 		a = 1 + \
 			2
+		b = ` + "`literal string`" + `
 	}
 	`))
 	require.NoError(t, err)
@@ -32,7 +33,7 @@ func TestLexer(t *testing.T) {
 	}
 	expected := []string{
 		"fn", "foo", "(", ")", "{", "if", "true", "{", "}", ";", "a", "=",
-		"1", "+", "2", ";", "}", ";", "",
+		"1", "+", "2", ";", "b", "=", "literal string", "}", ";", "",
 	}
 	require.Equal(t, expected, actual)
 }

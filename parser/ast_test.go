@@ -127,6 +127,13 @@ func TestParse(t *testing.T) {
 				let a: string? = "hello"
 			`,
 		},
+		{name: "ListEnumCase",
+			source: `
+				enum Value {
+				case Ints([int])
+				case Int(int)
+				}
+			`},
 	}
 
 	for _, test := range tests {

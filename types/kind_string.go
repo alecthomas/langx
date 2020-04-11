@@ -17,17 +17,16 @@ func _() {
 	_ = x[KindBool-6]
 	_ = x[KindInt-7]
 	_ = x[KindFloat-8]
-	_ = x[KindChan-9]
-	_ = x[KindTuple-10]
-	_ = x[KindClass-11]
-	_ = x[KindEnum-12]
-	_ = x[KindCase-13]
-	_ = x[KindAlias-14]
+	_ = x[KindTuple-9]
+	_ = x[KindClass-10]
+	_ = x[KindEnum-11]
+	_ = x[KindCase-12]
+	_ = x[KindAlias-13]
 }
 
-const _Kind_name = "nonegenericfunctionliteral-intliteral-floatstringboolintfloatchantupleclassenumcasealias"
+const _Kind_name = "nonegenericfunctionliteral-intliteral-floatstringboolintfloattupleclassenumcasealias"
 
-var _Kind_index = [...]uint8{0, 4, 11, 19, 30, 43, 49, 53, 56, 61, 65, 70, 75, 79, 83, 88}
+var _Kind_index = [...]uint8{0, 4, 11, 19, 30, 43, 49, 53, 56, 61, 66, 71, 75, 79, 84}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {

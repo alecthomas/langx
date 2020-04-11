@@ -412,10 +412,21 @@ func TestAnalyser(t *testing.T) {
 			`,
 			fail: `2:20: inconsistent element types int and string`,
 		},
-		{name: "ArrayLiteralHeterogenousLiteralNumbers",
+		{name: "ArrayLiteralHeterogenousLiteralNumbersInt",
 			input: `
 				let a = [1, 1.2]
 			`,
+			refs: refs{
+				"a": {&types.Value{types.Array(types.Int)}, nil},
+			},
+		},
+		{name: "ArrayLiteralHeterogenousLiteralNumbersFloat",
+			input: `
+				let a = [1.2, 1]
+			`,
+			refs: refs{
+				"a": {&types.Value{types.Array(types.Float)}, nil},
+			},
 		},
 		{name: "SetLiteral",
 			input: `
@@ -470,6 +481,20 @@ func TestAnalyser(t *testing.T) {
 			refs: refs{
 				"a": ref{&types.Value{types.Optional(types.Int)}, nil},
 			},
+		},
+		{name: "NestedEnum",
+			input: `
+				enum Scalar {
+					case Number(float)
+					case String(string)
+				}
+
+				enum Value {
+					case Scalar(Scalar)
+					case List([Scalar])
+					case Hash({string: Scalar})
+				}
+			`,
 		},
 	}
 

@@ -170,7 +170,7 @@ type Builtin Kind
 
 func (b Builtin) String() string { return Kind(b).String() }
 func (b Builtin) GoString() string {
-	s := Kind(b).String()
+	s := b.String()
 	s = "types." + strings.ToUpper(s[0:1]) + s[1:]
 	return s
 }

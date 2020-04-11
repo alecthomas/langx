@@ -5,7 +5,8 @@ package parser
 type Op int
 
 const (
-	OpModAsgn Op = iota // %=
+	OpNone    Op = iota //
+	OpModAsgn           // %=
 	OpGe                // >=
 	OpLe                // <=
 	OpAnd               // &&
