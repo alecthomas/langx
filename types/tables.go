@@ -47,15 +47,26 @@ var opMap = func() map[opKey]bool {
 	}
 	for _, op := range ops {
 		out[opKey{KindInt, op, KindInt}] = true
-		out[opKey{KindInt, op, KindNumberInt}] = true
-		out[opKey{KindInt, op, KindNumberFloat}] = true
-		out[opKey{KindNumberInt, op, KindInt}] = true
-		out[opKey{KindNumberInt, op, KindFloat}] = true
-		out[opKey{KindNumberFloat, op, KindFloat}] = true
-		out[opKey{KindNumberFloat, op, KindInt}] = true
+		out[opKey{KindInt, op, KindLiteralInt}] = true
+		out[opKey{KindInt, op, KindLiteralFloat}] = true
+		out[opKey{KindLiteralInt, op, KindInt}] = true
+		out[opKey{KindLiteralInt, op, KindLiteralInt}] = true
+		out[opKey{KindLiteralInt, op, KindFloat}] = true
+		out[opKey{KindLiteralInt, op, KindLiteralFloat}] = true
+		out[opKey{KindLiteralFloat, op, KindFloat}] = true
+		out[opKey{KindLiteralFloat, op, KindInt}] = true
+		out[opKey{KindLiteralFloat, op, KindLiteralFloat}] = true
+		out[opKey{KindLiteralFloat, op, KindLiteralInt}] = true
 		out[opKey{KindFloat, op, KindFloat}] = true
-		out[opKey{KindFloat, op, KindNumberFloat}] = true
-		out[opKey{KindFloat, op, KindNumberInt}] = true
+		out[opKey{KindFloat, op, KindLiteralFloat}] = true
+		out[opKey{KindFloat, op, KindLiteralInt}] = true
+	}
+	// Bitwise ops.
+	for _, op := range []parser.Op{parser.OpBitOr, parser.OpBitAnd} {
+		out[opKey{KindInt, op, KindInt}] = true
+		out[opKey{KindLiteralInt, op, KindInt}] = true
+		out[opKey{KindLiteralInt, op, KindLiteralInt}] = true
+		out[opKey{KindInt, op, KindLiteralInt}] = true
 	}
 	return out
 }()
@@ -66,10 +77,13 @@ type coercionKey struct {
 }
 
 var coercionMap = map[coercionKey]bool{
-	{KindNumberInt, KindInt}:     true,
-	{KindNumberInt, KindFloat}:   true,
-	{KindNumberFloat, KindFloat}: true,
-	{KindNumberFloat, KindInt}:   true,
-	{KindFloat, KindInt}:         true,
-	{KindInt, KindFloat}:         true,
+	{KindLiteralInt, KindInt}:       true,
+	{KindLiteralInt, KindFloat}:     true,
+	{KindLiteralFloat, KindFloat}:   true,
+	{KindLiteralFloat, KindInt}:     true,
+	{KindFloat, KindInt}:            true,
+	{KindInt, KindFloat}:            true,
+	{KindInt, KindLiteralInt}:       true,
+	{KindString, KindLiteralString}: true,
+	{KindLiteralString, KindString}: true,
 }

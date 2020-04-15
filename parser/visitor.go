@@ -47,6 +47,7 @@ type Visitor interface {
 	VisitEnumDecl(n *EnumDecl) error
 	VisitEnumMember(n *EnumMember) error
 	VisitExpr(n *Expr) error
+	VisitNew(n *NewExpr) error
 	VisitForStmt(n ForStmt) error
 	VisitFuncDecl(n *FuncDecl) error
 	VisitIfStmt(n IfStmt) error
@@ -70,49 +71,6 @@ type Visitor interface {
 	VisitVarDecl(n *VarDecl) error
 	VisitVarDeclAsgn(n VarDeclAsgn) error
 }
-
-// DefaultVisitor can be embedded to provide default no-op visitor methods.
-type DefaultVisitor struct{}
-
-var _ Visitor = DefaultVisitor{}
-
-func (d DefaultVisitor) VisitAST(n *AST) error                                    { return nil }
-func (d DefaultVisitor) VisitArrayLiteral(n ArrayLiteral) error                   { return nil }
-func (d DefaultVisitor) VisitBlock(n Block) error                                 { return nil }
-func (d DefaultVisitor) VisitCall(n Call) error                                   { return nil }
-func (d DefaultVisitor) VisitCaseDecl(n *CaseDecl) error                          { return nil }
-func (d DefaultVisitor) VisitCaseSelect(n CaseSelect) error                       { return nil }
-func (d DefaultVisitor) VisitCaseStmt(n CaseStmt) error                           { return nil }
-func (d DefaultVisitor) VisitClassDecl(n *ClassDecl) error                        { return nil }
-func (d DefaultVisitor) VisitClassMember(n *ClassMember) error                    { return nil }
-func (d DefaultVisitor) VisitDictOrSetEntryLiteral(n DictOrSetEntryLiteral) error { return nil }
-func (d DefaultVisitor) VisitDictOrSetLiteral(n DictOrSetLiteral) error           { return nil }
-func (d DefaultVisitor) VisitEnumCase(n EnumCase) error                           { return nil }
-func (d DefaultVisitor) VisitEnumDecl(n *EnumDecl) error                          { return nil }
-func (d DefaultVisitor) VisitEnumMember(n *EnumMember) error                      { return nil }
-func (d DefaultVisitor) VisitExpr(n *Expr) error                                  { return nil }
-func (d DefaultVisitor) VisitForStmt(n ForStmt) error                             { return nil }
-func (d DefaultVisitor) VisitFuncDecl(n *FuncDecl) error                          { return nil }
-func (d DefaultVisitor) VisitIfStmt(n IfStmt) error                               { return nil }
-func (d DefaultVisitor) VisitImportDecl(n *ImportDecl) error                      { return nil }
-func (d DefaultVisitor) VisitInitialiserDecl(n *InitialiserDecl) error            { return nil }
-func (d DefaultVisitor) VisitLiteral(n *Literal) error                            { return nil }
-func (d DefaultVisitor) VisitParameters(n Parameters) error                       { return nil }
-func (d DefaultVisitor) VisitReference(n *Reference) error                        { return nil }
-func (d DefaultVisitor) VisitReferenceNext(n *ReferenceNext) error                { return nil }
-func (d DefaultVisitor) VisitReturnStmt(n ReturnStmt) error                       { return nil }
-func (d DefaultVisitor) VisitRootDecl(n *RootDecl) error                          { return nil }
-func (d DefaultVisitor) VisitStmt(n Stmt) error                                   { return nil }
-func (d DefaultVisitor) VisitSwitchStmt(n SwitchStmt) error                       { return nil }
-func (d DefaultVisitor) VisitTerminal(n Terminal) error                           { return nil }
-func (d DefaultVisitor) VisitTypeDecl(n TypeDecl) error                           { return nil }
-func (d DefaultVisitor) VisitArrayTypeDecl(n *ArrayTypeDecl) error                { return nil }
-func (d DefaultVisitor) VisitDictOrSetTypeDecl(n *DictOrSetTypeDecl) error        { return nil }
-func (d DefaultVisitor) VisitNamedTypeDecl(n *NamedTypeDecl) error                { return nil }
-func (d DefaultVisitor) VisitTypeParamDecl(n TypeParamDecl) error                 { return nil }
-func (d DefaultVisitor) VisitUnary(n *Unary) error                                { return nil }
-func (d DefaultVisitor) VisitVarDecl(n *VarDecl) error                            { return nil }
-func (d DefaultVisitor) VisitVarDeclAsgn(n VarDeclAsgn) error                     { return nil }
 
 // TerminateRecursion should be returned by Visitor methods to terminate recursion.
 var TerminateRecursion = errors.New("no recurse")

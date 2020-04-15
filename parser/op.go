@@ -29,6 +29,8 @@ const (
 	OpPow               // ^
 	OpNot               // !
 	OpSend              // ->
+	OpBitOr             // |
+	OpBitAnd            // &
 )
 
 func (o Op) GoString() string {
@@ -79,6 +81,10 @@ func (o Op) GoString() string {
 		return "parser.OpNot"
 	case OpSend:
 		return "parser.OpSend"
+	case OpBitAnd:
+		return "parser.OpBitAnd"
+	case OpBitOr:
+		return "parser.OpBitOr"
 	default:
 		panic("??")
 	}
@@ -130,6 +136,10 @@ func (o *Op) Capture(values []string) error {
 		*o = OpPow
 	case "!":
 		*o = OpNot
+	case "|":
+		*o = OpBitOr
+	case "&":
+		*o = OpBitAnd
 	default:
 		panic(values[0])
 	}
@@ -142,10 +152,12 @@ type opInfo struct {
 }
 
 var info = map[Op]opInfo{
-	OpAdd: {Priority: 1},
-	OpSub: {Priority: 1},
-	OpMul: {Priority: 2},
-	OpDiv: {Priority: 2},
-	OpMod: {Priority: 2},
-	OpPow: {RightAssociative: true, Priority: 3},
+	OpAdd:    {Priority: 1},
+	OpSub:    {Priority: 1},
+	OpMul:    {Priority: 2},
+	OpDiv:    {Priority: 2},
+	OpMod:    {Priority: 2},
+	OpPow:    {RightAssociative: true, Priority: 3},
+	OpBitOr:  {Priority: 4},
+	OpBitAnd: {Priority: 4},
 }

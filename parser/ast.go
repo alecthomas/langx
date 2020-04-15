@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	// Note: "lex" is in this file to ensure correct initialisation ordering.
 	lex = lexer.Must(regex.New(`
 		comment = //.*|(?s:/\*.*?\*/)
 		backslash = \\
@@ -23,7 +24,7 @@ var (
 		String = "(\\.|[^"])*"|'[^']*'
 		LiteralString = ` + "`[^`]*`" + `
 		Newline = \n
-		Operator = ->|%=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!]
+		Operator = ->|%=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!|&]
 		Punct = []` + "`" + `~[()@#${}:;?.,]
 	`))
 	parser = participle.MustBuild(&AST{},
@@ -777,7 +778,7 @@ type FuncDecl struct {
 	Name       string        `"fn" @Ident "("`
 	Parameters []*Parameters `( @@ ( "," @@ )* )? ","? ")"`
 	Throws     bool          `@"throws"?`
-	Return     *Reference    `( ":" @@ )?`
+	Return     *Expr         `( ":" @@ )?`
 	Body       *Block        `@@`
 }
 

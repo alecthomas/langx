@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/alecthomas/repr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,6 +61,8 @@ enum Option<T> {
 }
 	
 fn test() {
+	let dict = new {string: int}()
+	let array = {string}()
 	let result = Result.value("hello world")
 
 	for v in result {
@@ -117,6 +118,7 @@ func TestParse(t *testing.T) {
 			source: `
 				let a = b[10].c()
 				`},
+		// TODO: Fails with: 3:4: unexpected token "<EOF>" (expected ";")
 		// {name: "GenericReference",
 		// 	source: `
 		// 		let a: Pair<string, int>
@@ -129,24 +131,27 @@ func TestParse(t *testing.T) {
 		},
 		{name: "CompoundEnumCases",
 			source: `
+				// Represents any JSON value.
 				enum Value {
-				case IntArray([int])
-				case IntMap({int: string})
-				case IntSet({int})
-				case Int(int)
+					case Number(float)
+					case String(string)
+					case List([Value])
+					case Object({string: Value})
 				}
 			`},
+		{name: "AnonymousEnum",
+			source: `fn f(): string|int {}`},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ast, err := ParseString(test.source)
+			_, err := ParseString(test.source)
 			if test.fail != "" {
-				require.EqualError(t, err, test.fail, repr.String(ast, repr.Indent("  ")))
+				require.EqualError(t, err, test.fail)
 			} else {
-				require.NoError(t, err, repr.String(ast, repr.Indent("  ")))
+				require.NoError(t, err)
 			}
-			repr.Println(ast)
+			// repr.Println(ast)
 		})
 	}
 }

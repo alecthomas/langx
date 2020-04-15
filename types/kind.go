@@ -5,21 +5,25 @@ package types
 type Kind int
 
 const (
-	KindNone    Kind = iota // none
-	KindGeneric             // generic
-	KindFunc                // function
+	KindNone Kind = iota // none
+	// TODO: Get rid of this. It's only used for builtin compound types (map and array)
+	//  and should be replaced by classes.
+	KindGeneric // generic
+	KindFunc    // function
 	// Numeric constant (can become any numeric type).
-	KindNumberInt   // literal-int
-	KindNumberFloat // literal-float
-	KindString      // string
-	KindBool        // bool
-	KindInt         // int
-	KindFloat       // float
-	KindTuple       // tuple
-	KindClass       // class
-	KindEnum        // enum
-	KindCase        // case
-	KindAlias       // alias
+	KindLiteralInt    // literal int
+	KindLiteralFloat  // literal float
+	KindLiteralString // literal string
+	KindString        // string
+	KindBool          // bool
+	KindInt           // int
+	KindFloat         // float
+	KindTuple         // tuple
+	KindClass         // class
+	KindEnum          // enum
+	KindCase          // case
+	KindAlias         // alias
+	KindAny           // any
 )
 
 // IsScalar returns true if the type is a scalar (string, bool, int, float).

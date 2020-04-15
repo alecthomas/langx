@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/participle/lexer"
 )
 
-// Expr node in the AST.
+// Expr represents an expression.
 type Expr struct {
 	Pos lexer.Position
 
@@ -127,14 +127,49 @@ func (u *Unary) String() string {
 	return u.Reference.Describe()
 }
 
+type InitParameter struct {
+	Name  string `@Ident`
+	Value *Expr  `"=" @@`
+}
+
+func (i *InitParameter) accept(visitor VisitorFunc) error {
+	return visitor(i, func(err error) error {
+		if err != nil {
+			return err
+		}
+		return VisitFunc(i.Value, visitor)
+	})
+}
+
+type NewExpr struct {
+	Type *Reference       `"new" @@`
+	Init []*InitParameter `( "(" ( @@ ( "," @@ )* ","? )? ")" )?`
+}
+
+func (n *NewExpr) accept(visitor VisitorFunc) error {
+	return visitor(n, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = VisitFunc(n.Type, visitor); err != nil {
+			return err
+		}
+		for _, param := range n.Init {
+			if err = VisitFunc(param, visitor); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 type Terminal struct {
 	Pos lexer.Position
 
-	Tuple         []*Expr      `  "(" @@ ( "," @@ )* ")"`
-	Literal       *Literal     `| @@`
-	Ident         string       `| ( @Ident`
-	TypeParameter []*Reference `    ("<" @@ ( "," @@ )* ","? ">" )?`
-	Optional      bool         `    @"?"? )`
+	Tuple   []*Expr  `  "(" @@ ( "," @@ )* ")"`
+	New     *NewExpr `| @@`
+	Literal *Literal `| @@`
+	Ident   string   `| @Ident`
 }
 
 func (t Terminal) accept(visitor VisitorFunc) error {
@@ -153,12 +188,10 @@ func (t Terminal) accept(visitor VisitorFunc) error {
 		case t.Literal != nil:
 			return VisitFunc(t.Literal, visitor)
 
+		case t.New != nil:
+			return VisitFunc(t.New, visitor)
+
 		case t.Ident != "":
-			for _, tp := range t.TypeParameter {
-				if err = VisitFunc(tp, visitor); err != nil {
-					return err
-				}
-			}
 			return nil
 
 		default:
@@ -170,6 +203,9 @@ func (t Terminal) accept(visitor VisitorFunc) error {
 
 func (t Terminal) Describe() string {
 	switch {
+	case t.New != nil:
+		return "new"
+
 	case t.Tuple != nil:
 		return "tuple/subexpression"
 
@@ -188,6 +224,7 @@ type Reference struct {
 
 	Terminal *Terminal      `@@`
 	Next     *ReferenceNext `@@?`
+	Optional bool           `"?"?`
 }
 
 func (t *Reference) accept(visitor VisitorFunc) error {
@@ -214,9 +251,12 @@ func (t *Reference) Describe() string {
 }
 
 type ReferenceNext struct {
-	Subscript *Expr     `(   "[" @@ "]"`
-	Reference *Terminal `  | "." @@`
-	Call      *Call     `  | @@ )`
+	Pos lexer.Position
+
+	Subscript      *Expr        `(   "[" @@ "]"`
+	Reference      *Terminal    `  | "." @@`
+	Specialisation []*Reference `  | "<" @@ ( "," @@ )* ","? ">"`
+	Call           *Call        `  | @@ )`
 
 	Next *ReferenceNext `@@?`
 }
@@ -228,6 +268,11 @@ func (r *ReferenceNext) accept(visitor VisitorFunc) error {
 		}
 		if err = VisitFunc(r.Subscript, visitor); err != nil {
 			return err
+		}
+		for _, ref := range r.Specialisation {
+			if err = VisitFunc(ref, visitor); err != nil {
+				return err
+			}
 		}
 		if err = VisitFunc(r.Reference, visitor); err != nil {
 			return err
@@ -253,6 +298,12 @@ func (r *ReferenceNext) Describe() string {
 
 	case r.Call != nil:
 		description = "call"
+
+	case r.Specialisation != nil:
+		description = "specialisation"
+
+	default:
+		panic("??")
 	}
 
 	if r.Next != nil {

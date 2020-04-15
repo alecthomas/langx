@@ -39,14 +39,14 @@ func TestAnalyser(t *testing.T) {
 				fn f(a, b: int): int { return 1 }
 				let v = f()
 				`,
-			fail: "3:14: 0 parameters provided for function that takes 2 parameters",
+			fail: "3:14: invalid initial value for \"v\": 0 parameters provided for function that takes 2 parameters",
 		},
 		{name: "CallInvalidArgumentType",
 			input: `
 				fn f(a, b: int): int { return 1 }
 				let v = f(1, "moo")
 				`,
-			fail: "3:18: can't coerce \"b\" from string to int",
+			fail: "3:18: invalid initial value for \"v\": can't coerce \"b\" from literal string to int",
 		},
 		{name: "VarDecl",
 			input: "let a, b = 1, c, d: string",
@@ -59,7 +59,7 @@ func TestAnalyser(t *testing.T) {
 		},
 		{name: "VarDeclUntyped",
 			input: "let a, b = 1, c, d: string, e",
-			fail:  "1:29: type not specified (and no default value provided)",
+			fail:  "1:29: type not specified for \"e\" (and no default value provided)",
 		},
 		{name: "ConstantTypeMismatch",
 			input: "let a: string = 1",
@@ -68,7 +68,7 @@ func TestAnalyser(t *testing.T) {
 		{name: "Class",
 			input: `class Class {}`,
 			refs: refs{
-				"Class": {&types.Class{}, nil},
+				"Class": {&types.Class{Name: "Class"}, nil},
 			},
 		},
 		{name: "ClassCreationNoInit",
@@ -78,7 +78,7 @@ func TestAnalyser(t *testing.T) {
 				let instance = Class()
 				`,
 			refs: refs{
-				"instance": {&types.Value{Typ: &types.Class{}}, nil},
+				"instance": {&types.Value{Typ: &types.Class{Name: "Class"}}, nil},
 			},
 		},
 		{name: "ClassCreationCustomInit",
@@ -94,6 +94,7 @@ func TestAnalyser(t *testing.T) {
 				"instance": {
 					&types.Value{
 						Typ: &types.Class{
+							Name: "Class",
 							Init: &types.Function{
 								Parameters: []types.Parameter{
 									{Name: "a", Type: types.Int},
@@ -115,8 +116,8 @@ func TestAnalyser(t *testing.T) {
 					}
 				`,
 			refs: refs{
-				"Class.field":  {types.Int, nil},
-				"Class.method": {&types.Function{ReturnType: types.None}, nil},
+				"Class.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
+				"Class.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
 			},
 		},
 		{name: "EnumFields",
@@ -130,11 +131,24 @@ func TestAnalyser(t *testing.T) {
 					}
 				`,
 			refs: refs{
-				"Enum.field":  {types.Int, nil},
-				"Enum.method": {&types.Function{ReturnType: types.None}, nil},
-				"Enum.None":   {&types.Case{Name: "None"}, normaliseCase},
-				"Enum.Int":    {&types.Case{Name: "Int", Case: types.Int}, normaliseCase},
+				"Enum.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
+				"Enum.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
+				"Enum.None":   {types.TypeField{Nme: "None", Typ: &types.Case{Name: "None"}}, normaliseCase},
+				"Enum.Int":    {types.TypeField{Nme: "Int", Typ: &types.Case{Name: "Int", Case: types.Int}}, normaliseCase},
 			},
+		},
+		{name: "InvalidFieldReference",
+			input: `
+				class A {
+					let b : string
+				}
+
+				fn main() {
+					let a = new A
+					a."foo"
+				}
+			`,
+			fail: `8:8: invalid field reference via literal string`,
 		},
 		{name: "EnumCreation",
 			input: `
@@ -143,8 +157,8 @@ func TestAnalyser(t *testing.T) {
 					case Int(int)
 				}
 		
-				let none = Enum.None
 				let value = Enum.Int(1)
+				let none = Enum.None
 			`,
 			refs: refs{
 				"none":  {&types.Value{Typ: &types.Case{Name: "None"}}, normaliseCaseValue},
@@ -172,7 +186,7 @@ func TestAnalyser(t *testing.T) {
 					}
 				}
 			`,
-			fail: "5:11: can't select case of type string value from int",
+			fail: "5:11: can't select case of type literal string value from int",
 		},
 		{name: "SwitchOnEnum",
 			input: `
@@ -227,7 +241,7 @@ func TestAnalyser(t *testing.T) {
 				let g = 1
 			`,
 		},
-		{name: "SwitchNotExhaustive",
+		{name: "EnumSwitchNotExhaustive",
 			input: `
 				enum Enum {
 					case None
@@ -410,7 +424,7 @@ func TestAnalyser(t *testing.T) {
 			input: `
 				let a = [1, 2, "3"]
 			`,
-			fail: `2:20: inconsistent element types int and string`,
+			fail: `2:20: invalid initial value for "a": inconsistent element types int and literal string`,
 		},
 		{name: "ArrayLiteralHeterogenousLiteralNumbersInt",
 			input: `
@@ -439,13 +453,13 @@ func TestAnalyser(t *testing.T) {
 			input: `
 				let a = {1, 2, "3"}
 			`,
-			fail: `2:20: inconsistent element types int and string`,
+			fail: `2:20: invalid initial value for "a": inconsistent element types int and literal string`,
 		},
 		{name: "SetAndDictValuesIntermingled",
 			input: `
 				let a = {1, 2:3}
 			`,
-			fail: `2:13: dict value in set at index 1`,
+			fail: `2:13: invalid initial value for "a": dict value in set at index 1`,
 		},
 		{name: "DictLiteral",
 			input: `
@@ -458,14 +472,24 @@ func TestAnalyser(t *testing.T) {
 			input: `
 				let a = {1:2, 2:3, "3":4}
 			`,
-			fail: `2:24: inconsistent element types int and string`,
+			fail: `2:24: invalid initial value for "a": inconsistent element types int and literal string`,
 		},
 		{name: "DictLiteralHeterogeneousValue",
 			input: `
 				let a = {1:2, 2:3, 3:"4"}
 			`,
-			fail: `2:26: inconsistent element types int and string`,
+			fail: `2:26: invalid initial value for "a": inconsistent element types int and literal string`,
 		},
+		{name: "InvalidType",
+			input: `
+				let a: foo
+			`,
+			fail: `2:12: invalid type for "a": unknown symbol "foo"`},
+		{name: "DuplicateVariable",
+			input: `
+				let a, a: int
+			`,
+			fail: `2:12: invalid variable "a": "a" redeclared`},
 		{name: "ArrayType",
 			input: `
 				let a: [int]
@@ -474,14 +498,14 @@ func TestAnalyser(t *testing.T) {
 				"a": ref{&types.Value{types.Array(types.Int)}, nil},
 			},
 		},
-		{name: "OptionalDecl",
-			input: `
-				let a:int? = 1
-			`,
-			refs: refs{
-				"a": ref{&types.Value{types.Optional(types.Int)}, nil},
-			},
-		},
+		// {name: "OptionalDecl",
+		// 	input: `
+		// 		let a:int? = 1
+		// 	`,
+		// 	refs: refs{
+		// 		"a": ref{&types.Value{types.Optional(types.Int)}, nil},
+		// 	},
+		// },
 		{name: "NestedEnum",
 			input: `
 				enum Scalar {
@@ -493,6 +517,56 @@ func TestAnalyser(t *testing.T) {
 					case Scalar(Scalar)
 					case List([Scalar])
 					case Hash({string: Scalar})
+				}
+			`,
+		},
+		{name: "New",
+			input: `
+				// let a = new {string:int}
+				// enum Enum {}
+				// let b = new Enum
+				// class Class {}
+				// let c = new Class
+				class Generic<T> {
+					let name : string
+				}
+				let d = new Generic<int>()
+			`,
+			refs: refs{
+				"a": ref{&types.Value{Typ: types.Map(types.String, types.Int)}, nil},
+				"b": ref{&types.Value{Typ: &types.Enum{}}, nil},
+				"c": ref{&types.Value{Typ: &types.Class{}}, nil},
+				"d": ref{&types.Value{Typ: &types.Class{
+					TParams: []types.TypeField{
+						{Nme: "T"},
+					},
+				}}, nil},
+			},
+		},
+		{name: "EnumUnambiguousInference",
+			input: `
+			enum A {
+				case int(int)
+				case string(string)
+			}
+
+			let a: A = "hello"
+			let b: A = 1
+			`},
+		{name: "EnumAmbiguousInference",
+			input: `
+			enum A {
+				case int(int)
+				case float(float)
+			}
+
+			let a: A = 1
+			`,
+			fail: `7:15: can't assign int to enum`},
+		{name: "AnonymousEnum",
+			input: `
+				fn func(): int|string {
+					return 1
 				}
 			`,
 		},
@@ -521,7 +595,7 @@ func TestAnalyser(t *testing.T) {
 						if ref.fix != nil {
 							ref.fix(actual)
 						}
-						require.Equal(t, expected, actual, "%s", repr.String(actual, repr.Indent("  ")))
+						require.Equal(t, repr.String(expected, repr.Indent("  ")), repr.String(actual, repr.Indent("  ")))
 					}
 				}
 			}
@@ -530,7 +604,7 @@ func TestAnalyser(t *testing.T) {
 }
 
 func normaliseCase(in types.Reference) {
-	in.(*types.Case).Enum = nil
+	in.(types.TypeField).Typ.(*types.Case).Enum = nil
 }
 
 func normaliseCaseValue(in types.Reference) {
@@ -541,7 +615,7 @@ func resolve(root *Scope, key string) types.Reference {
 	parts := strings.Split(key, ".")
 	ref := root.Resolve(parts[0])
 	for _, part := range parts[1:] {
-		ref = ref.FieldByName(part)
+		ref = types.FieldByName(ref, part)
 		if ref == nil {
 			return nil
 		}

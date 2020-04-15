@@ -5,9 +5,11 @@ import (
 )
 
 type Field struct {
-	Name string
+	Nme string
 	*Value
 }
+
+func (f Field) Name() string { return f.Nme }
 
 // A Value reference.
 type Value struct {
@@ -18,19 +20,11 @@ var _ Reference = &Value{}
 
 func (v *Value) Kind() Kind { return v.Typ.Kind() }
 func (v *Value) Type() Type { return v.Typ }
-func (v *Value) Fields() []Field {
-	flds := []Field{}
+func (v *Value) Fields() []FieldReference {
+	var flds []FieldReference
 	for _, ft := range v.Type().Fields() {
-		flds = append(flds, Field{Name: ft.Name, Value: &Value{Typ: ft.Type}})
+		flds = append(flds, Field{Nme: ft.Nme, Value: &Value{Typ: ft.Typ}})
 	}
 	return flds
-}
-func (v *Value) FieldByName(name string) Reference {
-	for _, f := range v.Fields() {
-		if f.Name == name {
-			return f
-		}
-	}
-	return nil
 }
 func (v *Value) String() string { return fmt.Sprintf("%s value", v.Kind()) }
