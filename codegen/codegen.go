@@ -39,7 +39,7 @@ func Generate(w io.Writer, program *analyser.Program) error {
 
 type generic struct {
 	name string
-	typ  types.Type   // types.Enum, types.Class
+	typ  types.Type   // types.Enum, types.ClassType
 	body parser.Decls // *parser.EnumDecl, *parser.ClassDecl, etc.
 }
 

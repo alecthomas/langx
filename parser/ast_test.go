@@ -94,8 +94,6 @@ func TestParse(t *testing.T) {
 		source string
 		fail   string
 	}{
-		{name: "FullSource",
-			source: testSource},
 		{name: "ArrayLiteral",
 			source: `
 				fn f(a: [int]) {}
@@ -141,6 +139,8 @@ func TestParse(t *testing.T) {
 			`},
 		{name: "AnonymousEnum",
 			source: `fn f(): string|int {}`},
+		{name: "FullSource",
+			source: testSource},
 	}
 
 	for _, test := range tests {

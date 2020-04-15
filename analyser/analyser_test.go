@@ -24,6 +24,67 @@ func TestAnalyser(t *testing.T) {
 		fail  string
 		refs  refs
 	}{
+		{name: "ExpressionStatementWithNoEffect",
+			input: `
+			fn f() {
+				let a: int
+				a == 10
+			}
+			`,
+			fail: `4:5: statement with no effect`,
+		},
+		{name: "ReferenceStatementWithNoEffect",
+			input: `
+			fn f() {
+				let a: int
+				a
+			}
+			`,
+			fail: `4:5: statement with no effect`,
+		},
+		{name: "FunctionCallStatement",
+			input: `
+			fn f() {
+				f()
+			}
+			`,
+		},
+		{name: "FunctionCallLHSAssignment",
+			input: `
+			fn f() {
+				f() = 10
+			}
+			`,
+			fail: `3:5: left hand side of assignment must be assignable`,
+		},
+		{name: "ExpressionLHSAssignment",
+			input: `
+			fn f() {
+				let a: int
+				(a == 10) = 10
+			}
+			`,
+			fail: `4:5: left hand side of assignment must be assignable`,
+		},
+		{name: "Assignment",
+			input: `
+			fn f() {
+				let a:int
+				a = 10
+			}
+			`,
+		},
+		{name: "FieldAssignment",
+			input: `
+			class A {
+				let a: int
+			}
+			
+			fn f() {
+				let a = new A
+				a.a = 10
+			}
+			`},
 		{name: "Call",
 			input: `
 				fn f(): int { return 1 }
@@ -31,7 +92,7 @@ func TestAnalyser(t *testing.T) {
 				`,
 			refs: refs{
 				"f": {&types.Function{ReturnType: types.Int}, nil},
-				"v": {&types.Value{Typ: types.Int}, nil},
+				"v": {types.Var(types.Int), nil},
 			},
 		},
 		{name: "CallInvalidNumberOfArguments",
@@ -51,10 +112,10 @@ func TestAnalyser(t *testing.T) {
 		{name: "VarDecl",
 			input: "let a, b = 1, c, d: string",
 			refs: refs{
-				"a": {&types.Value{Typ: types.Int}, nil},
-				"b": {&types.Value{Typ: types.Int}, nil},
-				"c": {&types.Value{Typ: types.String}, nil},
-				"d": {&types.Value{Typ: types.String}, nil},
+				"a": {types.Var(types.Int), nil},
+				"b": {types.Var(types.Int), nil},
+				"c": {types.Var(types.String), nil},
+				"d": {types.Var(types.String), nil},
 			},
 		},
 		{name: "VarDeclUntyped",
@@ -65,59 +126,59 @@ func TestAnalyser(t *testing.T) {
 			input: "let a: string = 1",
 			fail:  "1:17: can't assign int to string",
 		},
-		{name: "Class",
-			input: `class Class {}`,
+		{name: "ClassType",
+			input: `class ClassType {}`,
 			refs: refs{
-				"Class": {&types.Class{Name: "Class"}, nil},
+				"ClassType": {&types.ClassType{Name: "ClassType"}, nil},
 			},
 		},
 		{name: "ClassCreationNoInit",
 			input: `
-				class Class {}
+				class ClassType {}
 		
-				let instance = Class()
+				let instance = ClassType()
 				`,
 			refs: refs{
-				"instance": {&types.Value{Typ: &types.Class{Name: "Class"}}, nil},
+				"instance": {types.Var(&types.ClassType{Name: "ClassType"}), nil},
 			},
 		},
 		{name: "ClassCreationCustomInit",
 			input: `
-				class Class {
+				class ClassType {
 					init(a, b: int) {
 					}
 				}
 		
-				let instance = Class(1, 2)
+				let instance = ClassType(1, 2)
 				`,
 			refs: refs{
 				"instance": {
-					&types.Value{
-						Typ: &types.Class{
-							Name: "Class",
+					types.Var(
+						&types.ClassType{
+							Name: "ClassType",
 							Init: &types.Function{
-								Parameters: []types.Parameter{
-									{Name: "a", Type: types.Int},
-									{Name: "b", Type: types.Int},
+								Parameters: []types.TypeField{
+									{Nme: "a", Typ: types.Int},
+									{Nme: "b", Typ: types.Int},
 								},
 								ReturnType: types.None,
 							},
 						},
-					},
+					),
 					nil},
 			},
 		},
 		{name: "ClassFields",
 			input: `
-					class Class {
+					class ClassType {
 						let field = 1
 						fn method() {
 						}
 					}
 				`,
 			refs: refs{
-				"Class.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
-				"Class.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
+				"ClassType.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
+				"ClassType.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
 			},
 		},
 		{name: "EnumFields",
@@ -356,7 +417,7 @@ func TestAnalyser(t *testing.T) {
 			`},
 		{name: "Self",
 			input: `
-				class Class {
+				class ClassType {
 					let a: int
 	
 					init() {
@@ -399,14 +460,14 @@ func TestAnalyser(t *testing.T) {
 				let a = [1, 2, 3]
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Array(types.Int)}, nil},
+				"a": {&types.Value{Typ: types.Array(types.Int)}, nil},
 			}},
 		{name: "ArrayLiteralExplicit",
 			input: `
 				let a: [int] = [1, 2, 3]
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Array(types.Int)}, nil},
+				"a": {&types.Value{Typ: types.Array(types.Int)}, nil},
 			}},
 		{name: "ArrayLiteralInvalidExplicit",
 			input: `
@@ -431,7 +492,7 @@ func TestAnalyser(t *testing.T) {
 				let a = [1, 1.2]
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Array(types.Int)}, nil},
+				"a": {types.Var(types.Array(types.Int)), nil},
 			},
 		},
 		{name: "ArrayLiteralHeterogenousLiteralNumbersFloat",
@@ -439,7 +500,7 @@ func TestAnalyser(t *testing.T) {
 				let a = [1.2, 1]
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Array(types.Float)}, nil},
+				"a": {&types.Value{Typ: types.Array(types.Float)}, nil},
 			},
 		},
 		{name: "SetLiteral",
@@ -447,7 +508,7 @@ func TestAnalyser(t *testing.T) {
 				let a = {1, 2, 3}
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Set(types.Int)}, nil},
+				"a": {types.Var(types.Set(types.Int)), nil},
 			}},
 		{name: "SetLiteralHeterogeneous",
 			input: `
@@ -466,7 +527,7 @@ func TestAnalyser(t *testing.T) {
 				let a = {1:"2", 2:"3", 3:"4"}
 			`,
 			refs: refs{
-				"a": {&types.Value{types.Map(types.Int, types.String)}, nil},
+				"a": {types.Var(types.Map(types.Int, types.String)), nil},
 			}},
 		{name: "DictLiteralHeterogeneousKey",
 			input: `
@@ -495,17 +556,17 @@ func TestAnalyser(t *testing.T) {
 				let a: [int]
 			`,
 			refs: refs{
-				"a": ref{&types.Value{types.Array(types.Int)}, nil},
+				"a": ref{types.Var(types.Array(types.Int)), nil},
 			},
 		},
-		// {name: "OptionalDecl",
-		// 	input: `
-		// 		let a:int? = 1
-		// 	`,
-		// 	refs: refs{
-		// 		"a": ref{&types.Value{types.Optional(types.Int)}, nil},
-		// 	},
-		// },
+		{name: "OptionalDecl",
+			input: `
+				let a:int? = 1
+			`,
+			refs: refs{
+				"a": ref{types.Var(types.Optional(types.Int)), nil},
+			},
+		},
 		{name: "NestedEnum",
 			input: `
 				enum Scalar {
@@ -525,8 +586,8 @@ func TestAnalyser(t *testing.T) {
 				// let a = new {string:int}
 				// enum Enum {}
 				// let b = new Enum
-				// class Class {}
-				// let c = new Class
+				// class ClassType {}
+				// let c = new ClassType
 				class Generic<T> {
 					let name : string
 				}
@@ -535,8 +596,8 @@ func TestAnalyser(t *testing.T) {
 			refs: refs{
 				"a": ref{&types.Value{Typ: types.Map(types.String, types.Int)}, nil},
 				"b": ref{&types.Value{Typ: &types.Enum{}}, nil},
-				"c": ref{&types.Value{Typ: &types.Class{}}, nil},
-				"d": ref{&types.Value{Typ: &types.Class{
+				"c": ref{&types.Value{Typ: &types.ClassType{}}, nil},
+				"d": ref{&types.Value{Typ: &types.ClassType{
 					TParams: []types.TypeField{
 						{Nme: "T"},
 					},

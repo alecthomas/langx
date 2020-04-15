@@ -55,6 +55,22 @@ func (e *Expr) Parse(lex *lexer.PeekingLexer) error {
 	return nil
 }
 
+type opInfo struct {
+	RightAssociative bool
+	Priority         int
+}
+
+var info = map[Op]opInfo{
+	OpAdd:    {Priority: 1},
+	OpSub:    {Priority: 1},
+	OpMul:    {Priority: 2},
+	OpDiv:    {Priority: 2},
+	OpMod:    {Priority: 2},
+	OpPow:    {RightAssociative: true, Priority: 3},
+	OpBitOr:  {Priority: 4},
+	OpBitAnd: {Priority: 4},
+}
+
 // Precedence climbing implementation based on
 // https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
 func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
@@ -67,29 +83,29 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		op := &Expr{Pos: token.Pos}
+		expr := &Expr{Pos: token.Pos}
 		if token.Type != operatorToken {
 			break
 		}
-		err = op.Op.Capture([]string{token.Value})
+		err = expr.Op.Capture([]string{token.Value})
 		if err != nil {
-			return nil, err
+			return lhs, nil
 		}
-		if info[op.Op].Priority < minPrec {
+		if info[expr.Op].Priority < minPrec {
 			break
 		}
 		_, _ = lex.Next()
-		nextMinPrec := info[op.Op].Priority
-		if !info[op.Op].RightAssociative {
+		nextMinPrec := info[expr.Op].Priority
+		if !info[expr.Op].RightAssociative {
 			nextMinPrec++
 		}
 		rhs, err := parseExpr(lex, nextMinPrec)
 		if err != nil {
 			return nil, err
 		}
-		op.Left = lhs
-		op.Right = rhs
-		lhs = op
+		expr.Left = lhs
+		expr.Right = rhs
+		lhs = expr
 	}
 	return lhs, nil
 }

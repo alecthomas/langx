@@ -9,20 +9,20 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[OpNone-0]
-	_ = x[OpModAsgn-1]
-	_ = x[OpGe-2]
-	_ = x[OpLe-3]
-	_ = x[OpAnd-4]
-	_ = x[OpOr-5]
-	_ = x[OpEq-6]
-	_ = x[OpNe-7]
-	_ = x[OpAddAsgn-8]
-	_ = x[OpSubAsgn-9]
-	_ = x[OpMulAsgn-10]
-	_ = x[OpDivAsgn-11]
-	_ = x[OpPowAsgn-12]
-	_ = x[OpSub-13]
-	_ = x[OpAsgn-14]
+	_ = x[OpAsgn-1]
+	_ = x[OpAddAsgn-2]
+	_ = x[OpSubAsgn-3]
+	_ = x[OpMulAsgn-4]
+	_ = x[OpDivAsgn-5]
+	_ = x[OpModAsgn-6]
+	_ = x[OpPowAsgn-7]
+	_ = x[OpGe-8]
+	_ = x[OpLe-9]
+	_ = x[OpAnd-10]
+	_ = x[OpOr-11]
+	_ = x[OpEq-12]
+	_ = x[OpNe-13]
+	_ = x[OpSub-14]
 	_ = x[OpAdd-15]
 	_ = x[OpMul-16]
 	_ = x[OpDiv-17]
@@ -36,9 +36,9 @@ func _() {
 	_ = x[OpBitAnd-25]
 }
 
-const _Op_name = "%=>=<=&&||==!=+=-=*=/=^=-=+*/<>%^!->|&"
+const _Op_name = "=+=-=*=/=%=^=>=<=&&||==!=-+*/<>%^!->|&"
 
-var _Op_index = [...]uint8{0, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 36, 37, 38}
+var _Op_index = [...]uint8{0, 0, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 36, 37, 38}
 
 func (i Op) String() string {
 	if i < 0 || i >= Op(len(_Op_index)-1) {

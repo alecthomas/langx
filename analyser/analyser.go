@@ -234,7 +234,7 @@ func (a *analyser) resolveType(scope *Scope, cse *parser.TypeDecl) (types.Type, 
 }
 
 func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
-	clst := &types.Class{
+	clst := &types.ClassType{
 		Name: class.Type.Type,
 	}
 	// Intermediate scope for "self" (so we don't add it to the set of fields).
@@ -317,7 +317,7 @@ func (a *analyser) checkFuncDecl(scope *Scope, fn *parser.FuncDecl) (*Scope, err
 		err        error
 	)
 	if fn.Return != nil {
-		returnType, err = a.resolveExprType(scope, fn.Return)
+		returnType, err = a.resolveTypeExpr(scope, fn.Return)
 		if err != nil {
 			return nil, err
 		}
@@ -353,7 +353,7 @@ func (a *analyser) addParametersToScope(scope *Scope, parameters []*parser.Param
 		if err != nil {
 			return err
 		}
-		err = a.declVars(param.Pos, scope, &types.Value{Typ: typ}, param.Names...)
+		err = a.declVars(param.Pos, scope, types.Let(typ), param.Names...)
 		if err != nil {
 			return err
 		}
@@ -369,7 +369,7 @@ func (a *analyser) makeFunction(scope *Scope, returnType types.Type, parameters 
 			return nil, err
 		}
 		for _, name := range param.Names {
-			fnt.Parameters = append(fnt.Parameters, types.Parameter{Name: name, Type: typ})
+			fnt.Parameters = append(fnt.Parameters, types.TypeField{Nme: name, Typ: typ})
 		}
 	}
 	return fnt, nil
@@ -427,9 +427,8 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 	case stmt.Switch != nil:
 		return a.checkSwitch(scope, stmt.Switch)
 
-	case stmt.Expression != nil:
-		_, err := a.resolveExpr(scope, stmt.Expression)
-		return err
+	case stmt.ExprStmt != nil:
+		return a.checkExprStmt(scope, stmt.ExprStmt)
 
 	case stmt.Block != nil:
 		return a.checkBlock(scope.Sub(nil), stmt.Block)
@@ -623,7 +622,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 			// Infer type from the default value.
 			typ = dfltTyp
 		} else {
-			typ, err = a.resolveTypeReference(scope, decl.Type)
+			typ, err = a.resolveTypeExpr(scope, decl.Type)
 			if err != nil {
 				return participle.Wrapf(err, "invalid type for %q", decl.Name)
 			}
@@ -635,7 +634,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 				}
 			}
 		}
-		value := &types.Value{Typ: typ}
+		value := types.Var(typ)
 		for _, sym := range untyped {
 			a.p.associate(sym, value)
 		}
@@ -679,7 +678,7 @@ func (a *analyser) resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Val
 	}
 }
 
-func (a *analyser) resolveExprType(scope *Scope, expr *parser.Expr) (types.Type, error) {
+func (a *analyser) resolveTypeExpr(scope *Scope, expr *parser.Expr) (types.Type, error) {
 	ref, err := a.resolveExpr(scope, expr)
 	if err != nil {
 		return nil, err
@@ -764,7 +763,7 @@ func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (types.Reference,
 		return nil, err
 	}
 	if sym.Type().CanApply(unary.Op, types.None) {
-		return nil, participle.Errorf(unary.Pos, "! requires a boolean but got %s", sym.Kind())
+		return nil, participle.Errorf(unary.Pos, "%s requires a boolean but got %s", unary.Op, sym.Kind())
 	}
 	return a.resolveReference(s, unary.Reference)
 }
@@ -898,22 +897,22 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, ast *parse
 			return nil, participle.Errorf(ast.Call.Pos, "untyped case should not be called")
 		}
 		// Synthesise case parameters.
-		parameters := []types.Parameter{{Type: ref.Case, Name: ref.Name}}
+		parameters := []types.TypeField{{Typ: ref.Case, Nme: ref.Name}}
 		_, err := a.resolveCallActual(scope, ref.Case, parameters, ast.Call)
 		if err != nil {
 			return nil, err
 		}
 		return &types.Value{Typ: ref}, nil
 
-	case *types.Class:
-		var parameters []types.Parameter
+	case *types.ClassType:
+		var parameters []types.TypeField
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
 		return a.resolveCallActual(scope, ref, parameters, ast.Call)
 
 	case *types.Enum:
-		var parameters []types.Parameter
+		var parameters []types.TypeField
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
@@ -927,7 +926,7 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, ast *parse
 	}
 }
 
-func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parameters []types.Parameter, call *parser.Call) (*types.Value, error) {
+func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parameters []types.TypeField, call *parser.Call) (*types.Value, error) {
 	if len(parameters) != len(call.Parameters) {
 		return nil, participle.Errorf(call.Pos,
 			"%d parameters provided for function that takes %d parameters",
@@ -939,9 +938,9 @@ func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parame
 			return nil, err
 		}
 		parameter := parameters[i]
-		if types.Coerce(value.Type(), parameter.Type) == nil {
+		if types.Coerce(value.Type(), parameter.Typ) == nil {
 			return nil, participle.Errorf(param.Pos, "can't coerce %q from %s to %s",
-				parameter.Name, value.Kind(), parameter.Type)
+				parameter.Name(), value.Kind(), parameter.Type())
 		}
 	}
 	return &types.Value{Typ: returnType}, nil
@@ -1004,7 +1003,7 @@ func (a *analyser) resolveArrayLiteral(scope *Scope, array *parser.ArrayLiteral)
 		return nil, participle.Errorf(array.Pos, "can't infer element type from empty array")
 	}
 	if _, ok := element.(*types.Value); ok {
-		return &types.Value{types.Array(element.Type())}, nil
+		return &types.Value{Typ: types.Array(element.Type())}, nil
 	}
 	return types.Array(element.Type()), nil
 }
@@ -1031,7 +1030,7 @@ func (a *analyser) resolveSetLiteral(scope *Scope, set *parser.DictOrSetLiteral)
 		}
 	}
 	if _, ok := element.(*types.Value); ok {
-		return &types.Value{types.Set(element.Type())}, nil
+		return &types.Value{Typ: types.Set(element.Type())}, nil
 	}
 	return types.Set(element.Type()), nil
 }
@@ -1056,7 +1055,7 @@ func (a *analyser) resolveDictLiteral(scope *Scope, dict *parser.DictOrSetLitera
 		}
 	}
 	if _, ok := key.(*types.Value); ok {
-		return &types.Value{types.Map(key.Type(), value.Type())}, nil
+		return &types.Value{Typ: types.Map(key.Type(), value.Type())}, nil
 	}
 	return types.Map(key.Type(), value.Type()), nil
 }
@@ -1091,4 +1090,48 @@ func (a *analyser) checkCompoundTypeConsistency(scope *Scope, expr *parser.Expr,
 		}
 	}
 	return element, nil
+}
+
+// Expressions used as statements must either be a function call or an assignment.
+func (a *analyser) checkExprStmt(scope *Scope, stmt *parser.ExprStmt) error {
+	lhs, err := a.resolveExprValue(scope, stmt.LHS)
+	if err != nil {
+		return err
+	}
+	if stmt.LHS.Unary == nil {
+		return participle.Errorf(stmt.Pos, "statement with no effect")
+	}
+	if stmt.RHS == nil {
+		// We don't have a right-hand side, so we have to check that the LHS is a function call.
+		return a.checkExprStmtIsFunctionCall(scope, stmt.LHS.Unary)
+	}
+	if !lhs.Properties.Has(types.Assignable) {
+		return participle.Errorf(stmt.LHS.Pos, "left hand side of assignment must be assignable")
+	}
+	rhs, err := a.resolveExprValue(scope, stmt.RHS)
+	if err != nil {
+		return err
+	}
+	if types.Coerce(rhs.Type(), lhs.Type()) == nil {
+		return participle.Errorf(stmt.Pos, "couldn't assign %s to %s", rhs.Type(), lhs.Type())
+	}
+	return nil
+}
+
+func (a *analyser) checkExprStmtIsFunctionCall(scope *Scope, expr *parser.Unary) error {
+	if expr.Op != 0 {
+		return participle.Errorf(expr.Pos, "statement with no effect")
+	}
+	ref := expr.Reference.Next
+	if ref == nil {
+		return participle.Errorf(expr.Reference.Pos, "statement with no effect")
+	}
+	for ref.Next != nil {
+		ref = ref.Next
+	}
+	// Reference terminal must be a call.
+	if ref.Call == nil {
+		return participle.Errorf(expr.Reference.Pos, "statement with no effect")
+	}
+	return nil
 }

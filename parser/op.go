@@ -1,25 +1,29 @@
 package parser
 
+import (
+	"fmt"
+)
+
 //go:generate stringer -linecomment -type Op
 
 type Op int
 
 const (
 	OpNone    Op = iota //
+	OpAsgn              // =
+	OpAddAsgn           // +=
+	OpSubAsgn           // -=
+	OpMulAsgn           // *=
+	OpDivAsgn           // /=
 	OpModAsgn           // %=
+	OpPowAsgn           // ^=
 	OpGe                // >=
 	OpLe                // <=
 	OpAnd               // &&
 	OpOr                // ||
 	OpEq                // ==
 	OpNe                // !=
-	OpAddAsgn           // +=
-	OpSubAsgn           // -=
-	OpMulAsgn           // *=
-	OpDivAsgn           // /=
-	OpPowAsgn           // ^=
 	OpSub               // -
-	OpAsgn              // =
 	OpAdd               // +
 	OpMul               // *
 	OpDiv               // /
@@ -35,20 +39,10 @@ const (
 
 func (o Op) GoString() string {
 	switch o {
+	case OpAsgn:
+		return "parser.OpAsgn"
 	case OpModAsgn:
 		return "parser.OpModAssgn"
-	case OpGe:
-		return "parser.OpGe"
-	case OpLe:
-		return "parser.OpLe"
-	case OpAnd:
-		return "parser.OpAnd"
-	case OpOr:
-		return "parser.OpOr"
-	case OpEq:
-		return "parser.OpEq"
-	case OpNe:
-		return "parser.OpNe"
 	case OpAddAsgn:
 		return "parser.OpAddAsgn"
 	case OpSubAsgn:
@@ -59,10 +53,20 @@ func (o Op) GoString() string {
 		return "parser.OpDivAsgn"
 	case OpPowAsgn:
 		return "parser.OpPowAsgn"
+	case OpEq:
+		return "parser.OpEq"
+	case OpNe:
+		return "parser.OpNe"
+	case OpGe:
+		return "parser.OpGe"
+	case OpLe:
+		return "parser.OpLe"
+	case OpAnd:
+		return "parser.OpAnd"
+	case OpOr:
+		return "parser.OpOr"
 	case OpSub:
 		return "parser.OpSub"
-	case OpAsgn:
-		return "parser.OpAsgn"
 	case OpAdd:
 		return "parser.OpAdd"
 	case OpMul:
@@ -94,18 +98,6 @@ func (o *Op) Capture(values []string) error {
 	switch values[0] {
 	case "%=":
 		*o = OpModAsgn
-	case ">=":
-		*o = OpGe
-	case "<=":
-		*o = OpLe
-	case "&&":
-		*o = OpAnd
-	case "||":
-		*o = OpOr
-	case "==":
-		*o = OpEq
-	case "!=":
-		*o = OpNe
 	case "+=":
 		*o = OpAddAsgn
 	case "-=":
@@ -118,6 +110,18 @@ func (o *Op) Capture(values []string) error {
 		*o = OpPowAsgn
 	case "=":
 		*o = OpAsgn
+	case ">=":
+		*o = OpGe
+	case "<=":
+		*o = OpLe
+	case "&&":
+		*o = OpAnd
+	case "||":
+		*o = OpOr
+	case "==":
+		*o = OpEq
+	case "!=":
+		*o = OpNe
 	case "-":
 		*o = OpSub
 	case "+":
@@ -141,23 +145,7 @@ func (o *Op) Capture(values []string) error {
 	case "&":
 		*o = OpBitAnd
 	default:
-		panic(values[0])
+		return fmt.Errorf("invalid expression operator %q", values[0])
 	}
 	return nil
-}
-
-type opInfo struct {
-	RightAssociative bool
-	Priority         int
-}
-
-var info = map[Op]opInfo{
-	OpAdd:    {Priority: 1},
-	OpSub:    {Priority: 1},
-	OpMul:    {Priority: 2},
-	OpDiv:    {Priority: 2},
-	OpMod:    {Priority: 2},
-	OpPow:    {RightAssociative: true, Priority: 3},
-	OpBitOr:  {Priority: 4},
-	OpBitAnd: {Priority: 4},
 }

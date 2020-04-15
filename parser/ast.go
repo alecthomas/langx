@@ -24,7 +24,8 @@ var (
 		String = "(\\.|[^"])*"|'[^']*'
 		LiteralString = ` + "`[^`]*`" + `
 		Newline = \n
-		Operator = ->|%=|>=|<=|\^=|&&|\|\||==|!=|\+=|-=|\*=|/=|[-=+*/<>%^!|&]
+		Operator = ->|%=|>=|<=|&&|\|\||==|!=|[-+*/<>%^!|&]
+		Assignment = \^=|\+=|-=|\*=|/=|\|=|&=|%=|=
 		Punct = []` + "`" + `~[()@#${}:;?.,]
 	`))
 	parser = participle.MustBuild(&AST{},
@@ -540,9 +541,9 @@ func (v *VarDecl) decl() {}
 type VarDeclAsgn struct {
 	Pos lexer.Position
 
-	Name    string     `@Ident`
-	Type    *Reference `( ":" @@ )?`
-	Default *Expr      `( "=" @@ )?`
+	Name    string `@Ident`
+	Type    *Expr  `( ":" @@ )?`
+	Default *Expr  `( "=" @@ )?`
 }
 
 func (v VarDeclAsgn) accept(visitor VisitorFunc) error {
@@ -554,6 +555,32 @@ func (v VarDeclAsgn) accept(visitor VisitorFunc) error {
 			return err
 		}
 		return VisitFunc(v.Default, visitor)
+	})
+}
+
+// ExprStmt is either an assignment, or a function call.
+//
+// Other, invalid, expressions will be flagged during semantic analysis.
+type ExprStmt struct {
+	Pos lexer.Position
+
+	LHS *Expr `@@`
+	Op  Op    `( @Assignment`
+	RHS *Expr `  @@ )?`
+}
+
+func (a *ExprStmt) accept(visitor VisitorFunc) error {
+	return visitor(a, func(err error) error {
+		if err != nil {
+			return err
+		}
+		if err = VisitFunc(a.LHS, visitor); err != nil {
+			return err
+		}
+		if err = VisitFunc(a.RHS, visitor); err != nil {
+			return err
+		}
+		return nil
 	})
 }
 
@@ -569,9 +596,7 @@ type Stmt struct {
 	FuncDecl  *FuncDecl   `| @@`
 	ClassDecl *ClassDecl  `| @@`
 	EnumDecl  *EnumDecl   `| @@`
-
-	// Must be last alternative.
-	Expression *Expr `| @@`
+	ExprStmt  *ExprStmt   `| @@`
 }
 
 func (s Stmt) accept(visitor VisitorFunc) error {
@@ -598,8 +623,8 @@ func (s Stmt) accept(visitor VisitorFunc) error {
 			return VisitFunc(s.ClassDecl, visitor)
 		case s.EnumDecl != nil:
 			return VisitFunc(s.EnumDecl, visitor)
-		case s.Expression != nil:
-			return VisitFunc(s.Expression, visitor)
+		case s.ExprStmt != nil:
+			return VisitFunc(s.ExprStmt, visitor)
 		default:
 			panic("??")
 		}

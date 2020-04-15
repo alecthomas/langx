@@ -119,19 +119,21 @@ func (t Generic) String() string {
 }
 
 type MapType struct {
-	Generic
+	ClassType
 }
 
 func Map(key, value Type) Type {
-	return MapType{Generic{Constraints: []TypeField{
-		{"Key", key},
-		{"Value", value},
-	}}}
+	return &MapType{ClassType{
+		TParams: []TypeField{
+			{"Key", key},
+			{"Value", value},
+		}},
+	}
 }
 
-func (m MapType) Type() Type { return m }
-func (m MapType) String() string {
-	return fmt.Sprintf("{%s:%s}", m.Constraints[0].Typ, m.Constraints[1].Typ)
+func (m *MapType) Type() Type { return m }
+func (m *MapType) String() string {
+	return fmt.Sprintf("{%s:%s}", m.TParams[0].Typ, m.TParams[1].Typ)
 }
 
 type ArrayType struct {
@@ -168,7 +170,7 @@ func Optional(some Type) Type {
 }
 
 func (s *OptionalType) Coerce(direction Direction, other Type) Type {
-	if other == s.Enum.TParams[1].Typ {
+	if other == s.Enum.TParams[1].Typ || other.Kind() == KindNone {
 		return s
 	}
 	return nil
@@ -201,13 +203,8 @@ func (b Builtin) CanApply(op Op, other Type) bool {
 	return opMap[opKey{b.Kind(), op, other.Kind()}]
 }
 
-type Parameter struct {
-	Name string
-	Type
-}
-
 type Function struct {
-	Parameters []Parameter
+	Parameters []TypeField
 	ReturnType Type
 }
 
@@ -236,27 +233,27 @@ func (f *Function) String() string {
 	return w.String()
 }
 
-type Class struct {
+type ClassType struct {
 	Name    string
 	TParams []TypeField
 	Flds    []TypeField
 	Init    *Function
 }
 
-var _ Type = &Class{}
+var _ Type = &ClassType{}
 
-func (s *Class) Type() Type { return s }
-func (s *Class) Kind() Kind { return KindClass }
-func (s *Class) Coerce(direction Direction, other Type) Type {
+func (s *ClassType) Type() Type { return s }
+func (s *ClassType) Kind() Kind { return KindClass }
+func (s *ClassType) Coerce(direction Direction, other Type) Type {
 	if other == s {
 		return other
 	}
 	return nil
 }
-func (s *Class) CanApply(op Op, other Type) bool { return false }
-func (s *Class) Fields() []TypeField             { return s.Flds }
-func (s *Class) TypeParameters() []TypeField     { return s.TParams }
-func (s *Class) FieldByName(name string) Reference {
+func (s *ClassType) CanApply(op Op, other Type) bool { return false }
+func (s *ClassType) Fields() []TypeField             { return s.Flds }
+func (s *ClassType) TypeParameters() []TypeField     { return s.TParams }
+func (s *ClassType) FieldByName(name string) Reference {
 	for _, fld := range s.Flds {
 		if fld.Nme == name {
 			return fld.Typ
@@ -264,7 +261,7 @@ func (s *Class) FieldByName(name string) Reference {
 	}
 	return nil
 }
-func (s *Class) String() string { return "class" }
+func (s *ClassType) String() string { return "class" }
 
 type Case struct {
 	Name string
@@ -352,9 +349,12 @@ func (e *Enum) Coerce(direction Direction, other Type) Type {
 	}
 	return matched
 }
-func (e *Enum) CanApply(op Op, other Type) bool { return false }
-func (e *Enum) Fields() []TypeField             { return e.Flds }
-func (e *Enum) TypeParameters() []TypeField     { return e.TParams }
+func (e *Enum) CanApply(op Op, other Type) bool {
+	panic("??")
+	return false
+}
+func (e *Enum) Fields() []TypeField         { return e.Flds }
+func (e *Enum) TypeParameters() []TypeField { return e.TParams }
 func (e *Enum) FieldByName(name string) Reference {
 	for _, fld := range e.Flds {
 		if fld.Nme == name {
@@ -380,19 +380,19 @@ func Concrete(r Reference) (Reference, error) {
 	switch r.Type() {
 	case LiteralString:
 		if _, ok := r.(*Value); ok {
-			return &Value{String}, nil
+			return &Value{Typ: String}, nil
 		}
 		return String, nil
 
 	case LiteralInt:
 		if _, ok := r.(*Value); ok {
-			return &Value{Int}, nil
+			return &Value{Typ: Int}, nil
 		}
 		return Int, nil
 
 	case LiteralFloat:
 		if _, ok := r.(*Value); ok {
-			return &Value{Float}, nil
+			return &Value{Typ: Float}, nil
 		}
 		return Float, nil
 
@@ -406,7 +406,7 @@ func Concrete(r Reference) (Reference, error) {
 func ToOptional(r Reference) Reference {
 	switch r := r.(type) {
 	case *Value:
-		return &Value{Optional(r.Type())}
+		return &Value{Typ: Optional(r.Type())}
 
 	case Type:
 		return Optional(r)
@@ -458,7 +458,7 @@ func FieldByName(ref Reference, name string) FieldReference {
 // TypeName returns the simple name of a type, if any.
 func TypeName(t Type) string {
 	switch t := t.(type) {
-	case *Class:
+	case *ClassType:
 		return t.Name
 
 	case *Enum:

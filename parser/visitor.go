@@ -33,6 +33,7 @@ func VisitFunc(node Node, visit VisitorFunc) error {
 // Any method may return TerminateRecursion to stop recursion but continue with traversal.
 type Visitor interface {
 	VisitAST(n *AST) error
+	VisitExprStmt(n *ExprStmt) error
 	VisitArrayLiteral(n ArrayLiteral) error
 	VisitBlock(n Block) error
 	VisitCall(n Call) error
