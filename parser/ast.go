@@ -22,28 +22,39 @@ var (
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
 		String = "(\\.|[^"])*"|'[^']*'
-		LiteralString = ` + "`[^`]*`" + `
+		LiteralString = ` + "`.*?`" + `
 		Newline = \n
-		Operator = ->|%=|>=|<=|&&|\|\||==|!=|[-+*/<>%^!|&]
-		Assignment = \^=|\+=|-=|\*=|/=|\|=|&=|%=|=
+		Operator = ->|%=|>=|<=|&&|\|\||==|!=
+		Assignment = (\^=|\+=|-=|\*=|/=|\|=|&=|%=|=)
+		SingleOperator = [-+*/<>%^!|&]
 		Punct = []` + "`" + `~[()@#${}:;?.,]
 	`))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
-		participle.Unquote("String", "LiteralString"),
+		unquoteLiteral(),
+		participle.Unquote(),
 	)
 	unaryParser = participle.MustBuild(&Unary{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
-		participle.Unquote("String", "LiteralString"),
+		unquoteLiteral(),
+		participle.Unquote(),
 	)
 
-	identToken    = lex.Symbols()["Ident"]
-	stringToken   = lex.Symbols()["String"]
-	numberToken   = lex.Symbols()["Number"]
-	operatorToken = lex.Symbols()["Operator"]
+	identToken          = lex.Symbols()["Ident"]
+	stringToken         = lex.Symbols()["String"]
+	numberToken         = lex.Symbols()["Number"]
+	operatorToken       = lex.Symbols()["Operator"]
+	singleOperatorToken = lex.Symbols()["SingleOperator"]
 )
+
+func unquoteLiteral() participle.Option {
+	return participle.Map(func(token lexer.Token) (lexer.Token, error) {
+		token.Value = token.Value[1 : len(token.Value)-1]
+		return token, nil
+	}, "LiteralString")
+}
 
 // Decls is a group of declarations.
 type Decls interface {

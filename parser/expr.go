@@ -84,7 +84,7 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 			return nil, err
 		}
 		expr := &Expr{Pos: token.Pos}
-		if token.Type != operatorToken {
+		if token.Type != operatorToken && token.Type != singleOperatorToken {
 			break
 		}
 		err = expr.Op.Capture([]string{token.Value})

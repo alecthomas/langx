@@ -15,6 +15,7 @@ func (p Property) Has(prop Property) bool { return p&prop != 0 }
 // Set proerties.
 func (p *Property) Set(prop Property) { *p |= prop }
 
+// Value properties.
 const (
 	Assignable Property = 1 << iota
 )

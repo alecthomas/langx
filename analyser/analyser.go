@@ -92,7 +92,7 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 	}
 	// Intermediate scope for "self" (so we don't add it to the set of fields).
 	enumScope := scope.Sub(enumt)
-	err = enumScope.AddValue("self", &types.Value{Typ: enumt})
+	err = enumScope.AddValue("self", types.Var(enumt))
 	if err != nil {
 		return participle.Errorf(enum.Pos, "%s", err)
 	}
@@ -243,7 +243,7 @@ func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 	if err != nil {
 		return participle.AnnotateError(class.Pos, err)
 	}
-	err = classScope.AddValue("self", &types.Value{Typ: clst})
+	err = classScope.AddValue("self", types.Var(clst))
 	if err != nil {
 		return participle.AnnotateError(class.Pos, err)
 	}
@@ -607,11 +607,11 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 		if decl.Default != nil {
 			dfltValue, err := a.resolveExprValue(scope, decl.Default)
 			if err != nil {
-				return participle.Wrapf(err, "invalid initial value for %q", decl.Name)
+				return participle.Wrapf(decl.Default.Pos, err, "invalid initial value for %q", decl.Name)
 			}
 			ref, err := types.Concrete(dfltValue.Type())
 			if err != nil {
-				return participle.Wrapf(err, "invalid initial value for %q", decl.Name)
+				return participle.Wrapf(decl.Default.Pos, err, "invalid initial value for %q", decl.Name)
 			}
 			dfltTyp = ref.(types.Type)
 		}
@@ -624,7 +624,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 		} else {
 			typ, err = a.resolveTypeExpr(scope, decl.Type)
 			if err != nil {
-				return participle.Wrapf(err, "invalid type for %q", decl.Name)
+				return participle.Wrapf(decl.Type.Pos, err, "invalid type for %q", decl.Name)
 			}
 			if dfltTyp != nil {
 				if coerced := types.Coerce(dfltTyp, typ); coerced == nil {
@@ -644,7 +644,7 @@ func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 		}
 		err = a.declVars(decl.Pos, scope, value, names...)
 		if err != nil {
-			return participle.Wrapf(err, "invalid variable %q", decl.Name)
+			return participle.Wrapf(decl.Pos, err, "invalid variable %q", decl.Name)
 		}
 		untyped = nil
 	}
@@ -762,7 +762,7 @@ func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (types.Reference,
 	if err != nil {
 		return nil, err
 	}
-	if sym.Type().CanApply(unary.Op, types.None) {
+	if unary.Op != 0 && sym.Type().CanApply(unary.Op, types.None) {
 		return nil, participle.Errorf(unary.Pos, "%s requires a boolean but got %s", unary.Op, sym.Kind())
 	}
 	return a.resolveReference(s, unary.Reference)
@@ -875,7 +875,7 @@ func (a *analyser) resolveReferenceNext(scope *Scope, ref types.Reference, next 
 		for i, param := range next.Specialisation {
 			ptyp, err := a.resolveTypeReference(scope, param)
 			if err != nil {
-				return nil, participle.Wrapf(err, "type parameter %s", typeParams[i].Nme)
+				return nil, participle.Wrapf(next.Pos, err, "type parameter %s", typeParams[i].Nme)
 			}
 			if typeParams[i].Typ != nil {
 				return nil, participle.Errorf(param.Pos, "type constraints are not supported")

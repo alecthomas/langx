@@ -74,6 +74,14 @@ func TestAnalyser(t *testing.T) {
 			}
 			`,
 		},
+		// TODO: Make this work.
+		// {name: "IncrementStatement",
+		// 	input: `
+		// 	fn f() {
+		// 		let a:int
+		// 		a++
+		// 	}
+		// 	`},
 		{name: "FieldAssignment",
 			input: `
 			class A {
@@ -222,8 +230,8 @@ func TestAnalyser(t *testing.T) {
 				let none = Enum.None
 			`,
 			refs: refs{
-				"none":  {&types.Value{Typ: &types.Case{Name: "None"}}, normaliseCaseValue},
-				"value": {&types.Value{Typ: &types.Case{Name: "Int", Case: types.Int}}, normaliseCaseValue},
+				"none":  {types.Var(&types.Case{Name: "None"}), normaliseCaseValue},
+				"value": {types.Var(&types.Case{Name: "Int", Case: types.Int}), normaliseCaseValue},
 			},
 		},
 		{name: "SwitchOnValue",
@@ -460,14 +468,14 @@ func TestAnalyser(t *testing.T) {
 				let a = [1, 2, 3]
 			`,
 			refs: refs{
-				"a": {&types.Value{Typ: types.Array(types.Int)}, nil},
+				"a": {types.Var(types.Array(types.Int)), nil},
 			}},
 		{name: "ArrayLiteralExplicit",
 			input: `
 				let a: [int] = [1, 2, 3]
 			`,
 			refs: refs{
-				"a": {&types.Value{Typ: types.Array(types.Int)}, nil},
+				"a": {types.Var(types.Array(types.Int)), nil},
 			}},
 		{name: "ArrayLiteralInvalidExplicit",
 			input: `
@@ -500,7 +508,7 @@ func TestAnalyser(t *testing.T) {
 				let a = [1.2, 1]
 			`,
 			refs: refs{
-				"a": {&types.Value{Typ: types.Array(types.Float)}, nil},
+				"a": {types.Var(types.Array(types.Float)), nil},
 			},
 		},
 		{name: "SetLiteral",
@@ -629,7 +637,26 @@ func TestAnalyser(t *testing.T) {
 				fn func(): int|string {
 					return 1
 				}
+
+				let a = func()
 			`,
+			refs: refs{
+				"a": {types.Var(
+					&types.Enum{
+						Flds: []types.TypeField{{
+							Nme: "int",
+							Typ: &types.Case{
+								Name: "int",
+								Case: types.Int,
+							}}, {
+							Nme: "string",
+							Typ: &types.Case{
+								Name: "string",
+								Case: types.String,
+							}},
+						},
+					}), nil},
+			},
 		},
 	}
 
@@ -640,7 +667,7 @@ func TestAnalyser(t *testing.T) {
 				if test.fail == "" {
 					require.NoError(t, err)
 				} else {
-					require.EqualError(t, err, test.fail)
+					require.EqualError(t, err, test.fail, test.input)
 				}
 				return
 			}
@@ -648,7 +675,7 @@ func TestAnalyser(t *testing.T) {
 			if test.fail != "" {
 				require.EqualError(t, err, test.fail)
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, err, test.input)
 				if test.refs != nil {
 					for key, ref := range test.refs {
 						expected := ref.ref

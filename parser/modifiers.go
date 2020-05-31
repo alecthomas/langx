@@ -40,10 +40,10 @@ func (m *Modifiers) Capture(values []string) error {
 		*m |= ModifierPublic
 
 	case "override":
-		*m = ModifierOverride
+		*m |= ModifierOverride
 
 	case "static":
-		*m = ModifierStatic
+		*m |= ModifierStatic
 
 	default:
 		panic("??")

@@ -224,7 +224,7 @@ func (f *Function) String() string {
 		if i > 0 {
 			fmt.Fprint(w, ", ")
 		}
-		fmt.Fprintf(w, "%s %s", param.Name, param.Type)
+		fmt.Fprintf(w, "%s %s", param.Name(), param.Type())
 	}
 	fmt.Fprint(w, ")")
 	if f.ReturnType != None {
@@ -350,7 +350,7 @@ func (e *Enum) Coerce(direction Direction, other Type) Type {
 	return matched
 }
 func (e *Enum) CanApply(op Op, other Type) bool {
-	panic("??")
+	panic(fmt.Sprintf("%s %s", op.String(), other.String()))
 	return false
 }
 func (e *Enum) Fields() []TypeField         { return e.Flds }
