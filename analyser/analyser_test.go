@@ -165,7 +165,7 @@ func TestAnalyser(t *testing.T) {
 						&types.ClassType{
 							Name: "ClassType",
 							Init: &types.Function{
-								Parameters: []types.TypeField{
+								Parameters: []types.NamedType{
 									{Nme: "a", Typ: types.Int},
 									{Nme: "b", Typ: types.Int},
 								},
@@ -185,8 +185,8 @@ func TestAnalyser(t *testing.T) {
 					}
 				`,
 			refs: refs{
-				"ClassType.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
-				"ClassType.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
+				"ClassType.field":  {types.NamedType{Nme: "field", Typ: types.Int}, nil},
+				"ClassType.method": {types.NamedType{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
 			},
 		},
 		{name: "EnumFields",
@@ -195,18 +195,16 @@ func TestAnalyser(t *testing.T) {
 						case None
 						case Int(int)
 		
-						let field = 1
 						fn method() {}
 					}
 				`,
 			refs: refs{
-				"Enum.field":  {types.TypeField{Nme: "field", Typ: types.Int}, nil},
-				"Enum.method": {types.TypeField{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
-				"Enum.None":   {types.TypeField{Nme: "None", Typ: &types.Case{Name: "None"}}, normaliseCase},
-				"Enum.Int":    {types.TypeField{Nme: "Int", Typ: &types.Case{Name: "Int", Case: types.Int}}, normaliseCase},
+				"Enum.method": {types.NamedType{Nme: "method", Typ: &types.Function{ReturnType: types.None}}, nil},
+				"Enum.None":   {types.NamedType{Nme: "None", Typ: &types.Case{Name: "None"}}, normaliseCase},
+				"Enum.Int":    {types.NamedType{Nme: "Int", Typ: &types.Case{Name: "Int", Case: types.Int}}, normaliseCase},
 			},
 		},
-		{name: "InvalidFieldReference",
+		{name: "InvalidNamedReference",
 			input: `
 				class A {
 					let b : string
@@ -406,7 +404,7 @@ func TestAnalyser(t *testing.T) {
 					let b: B
 				}
 		
-				// let a = Pair<string, string>()
+				// let a = new Pair<string, string>()
 				`,
 		},
 		{name: "GenericEnum",
@@ -591,25 +589,25 @@ func TestAnalyser(t *testing.T) {
 		},
 		{name: "New",
 			input: `
-				// let a = new {string:int}
-				// enum Enum {}
-				// let b = new Enum
-				// class ClassType {}
-				// let c = new ClassType
-				class Generic<T> {
-					let name : string
-				}
-				let d = new Generic<int>()
+				let a = new {string:int}
+				enum Enum {}
+				let b = new Enum
+				class ClassType {}
+				let c = new ClassType
+				// class Generic<T> {
+				// 	let name : string
+				// }
+				// let d = new Generic<int>()
 			`,
 			refs: refs{
-				"a": ref{&types.Value{Typ: types.Map(types.String, types.Int)}, nil},
-				"b": ref{&types.Value{Typ: &types.Enum{}}, nil},
-				"c": ref{&types.Value{Typ: &types.ClassType{}}, nil},
-				"d": ref{&types.Value{Typ: &types.ClassType{
-					TParams: []types.TypeField{
-						{Nme: "T"},
-					},
-				}}, nil},
+				"a": ref{&types.Value{Typ: types.Map(types.String, types.Int), Properties: types.Assignable}, nil},
+				"b": ref{&types.Value{Typ: &types.Enum{Name: "Enum"}, Properties: types.Assignable}, nil},
+				"c": ref{&types.Value{Typ: &types.ClassType{Name: "ClassType"}, Properties: types.Assignable}, nil},
+				// "d": ref{&types.Value{Typ: &types.ClassType{
+				// 	TParams: []types.NamedType{
+				// 		{Nme: "T"},
+				// 	},
+				// }}, nil},
 			},
 		},
 		{name: "EnumUnambiguousInference",
@@ -641,9 +639,9 @@ func TestAnalyser(t *testing.T) {
 				let a = func()
 			`,
 			refs: refs{
-				"a": {types.Var(
-					&types.Enum{
-						Flds: []types.TypeField{{
+				"func": {&types.Function{
+					ReturnType: &types.Enum{
+						Flds: []types.NamedType{{
 							Nme: "int",
 							Typ: &types.Case{
 								Name: "int",
@@ -655,7 +653,7 @@ func TestAnalyser(t *testing.T) {
 								Case: types.String,
 							}},
 						},
-					}), nil},
+					}}, nil},
 			},
 		},
 	}
@@ -665,7 +663,7 @@ func TestAnalyser(t *testing.T) {
 			ast, err := parser.ParseString(test.input + "\n")
 			if err != nil {
 				if test.fail == "" {
-					require.NoError(t, err)
+					require.NoError(t, err, test.input)
 				} else {
 					require.EqualError(t, err, test.fail, test.input)
 				}
@@ -673,7 +671,7 @@ func TestAnalyser(t *testing.T) {
 			}
 			program, err := Analyse(ast)
 			if test.fail != "" {
-				require.EqualError(t, err, test.fail)
+				require.EqualError(t, err, test.fail, test.input)
 			} else {
 				require.NoError(t, err, test.input)
 				if test.refs != nil {
@@ -683,7 +681,7 @@ func TestAnalyser(t *testing.T) {
 						if ref.fix != nil {
 							ref.fix(actual)
 						}
-						require.Equal(t, repr.String(expected, repr.Indent("  ")), repr.String(actual, repr.Indent("  ")))
+						require.Equal(t, repr.String(expected, repr.Indent("  ")), repr.String(actual, repr.Indent("  ")), test.input)
 					}
 				}
 			}
@@ -692,7 +690,7 @@ func TestAnalyser(t *testing.T) {
 }
 
 func normaliseCase(in types.Reference) {
-	in.(types.TypeField).Typ.(*types.Case).Enum = nil
+	in.(types.NamedType).Typ.(*types.Case).Enum = nil
 }
 
 func normaliseCaseValue(in types.Reference) {

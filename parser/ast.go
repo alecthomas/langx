@@ -186,12 +186,8 @@ type EnumMember struct {
 
 	Modifiers Modifiers `@Modifier*`
 
-	CaseDecl        *CaseDecl        `(  @@`
-	VarDecl         *VarDecl         ` | @@`
-	FuncDecl        *FuncDecl        ` | @@`
-	ClassDecl       *ClassDecl       ` | @@`
-	EnumDecl        *EnumDecl        ` | @@`
-	InitialiserDecl *InitialiserDecl ` | @@ )`
+	CaseDecl *CaseDecl `(  @@`
+	FuncDecl *FuncDecl ` | @@ )`
 }
 
 func (e *EnumMember) accept(visitor VisitorFunc) error {
@@ -213,18 +209,6 @@ func (e *EnumMember) Decl() Decl {
 	switch {
 	case e.CaseDecl != nil:
 		return e.CaseDecl
-
-	case e.VarDecl != nil:
-		return e.VarDecl
-
-	case e.FuncDecl != nil:
-		return e.FuncDecl
-
-	case e.ClassDecl != nil:
-		return e.ClassDecl
-
-	case e.InitialiserDecl != nil:
-		return e.InitialiserDecl
 
 	default:
 		panic("??")

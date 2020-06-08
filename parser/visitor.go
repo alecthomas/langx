@@ -22,7 +22,7 @@ type VisitorFunc func(node Node, next Next) error
 
 // VisitFunc calls the visitor function on all nodes.
 func VisitFunc(node Node, visit VisitorFunc) error {
-	if node == nil {
+	if node == nil || (reflect.ValueOf(node).Kind() == reflect.Ptr && reflect.ValueOf(node).IsNil()) {
 		return nil
 	}
 	return node.accept(visit)

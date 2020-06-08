@@ -113,11 +113,6 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 				return err
 			}
 
-		case member.VarDecl != nil:
-			if err := a.checkVarDecl(enumScope, member.VarDecl); err != nil {
-				return err
-			}
-
 		case member.FuncDecl != nil:
 			funcScope, err := a.checkFuncDecl(enumScope, member.FuncDecl)
 			if err != nil {
@@ -125,36 +120,21 @@ func (a *analyser) checkEnumDecl(scope *Scope, enum *parser.EnumDecl) error {
 			}
 			a.deferFunc(member.FuncDecl.Body, funcScope)
 
-		case member.EnumDecl != nil:
-			if err := a.checkEnumDecl(enumScope, member.EnumDecl); err != nil {
-				return err
-			}
-
-		case member.ClassDecl != nil:
-			if err := a.checkClassDecl(enumScope, member.ClassDecl); err != nil {
-				return err
-			}
-
-		case member.InitialiserDecl != nil:
-			initScope, init, err := a.resolveInitialiserDecl(enumScope, member.InitialiserDecl)
-			if err != nil {
-				return err
-			}
-			enumt.Init = init
-			a.deferFunc(member.InitialiserDecl.Body, initScope)
+		default:
+			panic("??")
 		}
 	}
 	enumt.Flds = a.scopeToTypeFields(enumScope)
 	return nil
 }
 
-func (a *analyser) declGenericParameters(scope *Scope, t *parser.NamedTypeDecl) ([]types.TypeField, error) {
-	var flds []types.TypeField
+func (a *analyser) declGenericParameters(scope *Scope, t *parser.NamedTypeDecl) ([]types.NamedType, error) {
+	var flds []types.NamedType
 	for _, gp := range t.TypeParameter {
 		if len(gp.Constraints) > 0 {
 			return nil, participle.Errorf(t.Pos, "generic constraints are not supported yet")
 		}
-		flds = append(flds, types.TypeField{
+		flds = append(flds, types.NamedType{
 			Nme: gp.Name,
 		})
 		a.p.associate(t, types.Any)
@@ -166,11 +146,11 @@ func (a *analyser) declGenericParameters(scope *Scope, t *parser.NamedTypeDecl) 
 	return flds, nil
 }
 
-func (a *analyser) scopeToTypeFields(scope *Scope) []types.TypeField {
+func (a *analyser) scopeToTypeFields(scope *Scope) []types.NamedType {
 	symbols := scope.Symbols()
-	var out []types.TypeField
+	var out []types.NamedType
 	for name, sym := range symbols {
-		out = append(out, types.TypeField{
+		out = append(out, types.NamedType{
 			Nme: name,
 			Typ: sym.Type(),
 		})
@@ -369,7 +349,7 @@ func (a *analyser) makeFunction(scope *Scope, returnType types.Type, parameters 
 			return nil, err
 		}
 		for _, name := range param.Names {
-			fnt.Parameters = append(fnt.Parameters, types.TypeField{Nme: name, Typ: typ})
+			fnt.Parameters = append(fnt.Parameters, types.NamedType{Nme: name, Typ: typ})
 		}
 	}
 	return fnt, nil
@@ -660,7 +640,7 @@ func (a *analyser) resolveExprValue(scope *Scope, expr *parser.Expr) (*types.Val
 		return nil, err
 	}
 	// Special case referencing enum case fields so they are correctly turned into values.
-	if tfield, ok := ref.(types.TypeField); ok {
+	if tfield, ok := ref.(types.NamedType); ok {
 		ref = tfield.Typ
 	}
 	switch ref := ref.(type) {
@@ -690,8 +670,15 @@ func (a *analyser) resolveTypeExpr(scope *Scope, expr *parser.Expr) (types.Type,
 	return typ, nil
 }
 
+func (a *analyser) autoAssoc(node parser.Node, ref *types.Reference) {
+	if *ref != nil {
+		a.p.associate(node, *ref)
+	}
+}
+
 // Check and resolve an expression to its type.
-func (a *analyser) resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference, error) {
+func (a *analyser) resolveExpr(scope *Scope, expr *parser.Expr) (ref types.Reference, err error) {
+	defer a.autoAssoc(expr, &ref)
 	if expr.Unary != nil {
 		return a.resolveUnary(scope, expr.Unary)
 	}
@@ -718,7 +705,8 @@ func (a *analyser) resolveExpr(scope *Scope, expr *parser.Expr) (types.Reference
 		return lhs, nil
 
 	case parser.OpLe, parser.OpLt, parser.OpGe, parser.OpGt, parser.OpEq, parser.OpNe:
-		return &types.Value{Typ: types.Bool}, nil
+		ref := &types.Value{Typ: types.Bool}
+		return ref, nil
 	}
 	panic(expr.Pos.String())
 }
@@ -738,15 +726,15 @@ func (a *analyser) resolveAnonymousEnum(lhs, rhs types.Reference) types.Referenc
 	}
 }
 
-func (a *analyser) typeToFields(typ types.Reference) []types.TypeField {
-	var fields []types.TypeField
+func (a *analyser) typeToFields(typ types.Reference) []types.NamedType {
+	var fields []types.NamedType
 	switch typ := typ.(type) {
 	case *types.Enum:
 		fields = append(fields, typ.Fields()...)
 
 	case types.Type:
 		name := types.TypeName(typ)
-		fields = append(fields, types.TypeField{
+		fields = append(fields, types.NamedType{
 			Nme: name,
 			Typ: &types.Case{
 				Name: name,
@@ -757,7 +745,8 @@ func (a *analyser) typeToFields(typ types.Reference) []types.TypeField {
 	return fields
 }
 
-func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (types.Reference, error) {
+func (a *analyser) resolveUnary(s *Scope, unary *parser.Unary) (ref types.Reference, err error) {
+	defer a.autoAssoc(unary, &ref)
 	sym, err := a.resolveReference(s, unary.Reference)
 	if err != nil {
 		return nil, err
@@ -794,7 +783,8 @@ func (a *analyser) resolveValueReference(scope *Scope, terminal *parser.Referenc
 	return val, nil
 }
 
-func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (types.Reference, error) {
+func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (ref types.Reference, err error) {
+	defer a.autoAssoc(terminal, &ref)
 	switch {
 	case terminal.Literal != nil:
 		return a.resolveLiteral(scope, terminal.Literal)
@@ -828,8 +818,9 @@ func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (typ
 	}
 }
 
-func (a *analyser) resolveReference(scope *Scope, reference *parser.Reference) (types.Reference, error) {
-	ref, err := a.resolveTerminal(scope, reference.Terminal)
+func (a *analyser) resolveReference(scope *Scope, reference *parser.Reference) (ref types.Reference, err error) {
+	defer a.autoAssoc(reference, &ref)
+	ref, err = a.resolveTerminal(scope, reference.Terminal)
 	if err != nil {
 		return nil, err
 	}
@@ -844,7 +835,6 @@ func (a *analyser) resolveReference(scope *Scope, reference *parser.Reference) (
 		}
 		ref = types.Optional(typ)
 	}
-	a.p.associate(reference, ref)
 	return ref, nil
 }
 
@@ -897,7 +887,7 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, ast *parse
 			return nil, participle.Errorf(ast.Call.Pos, "untyped case should not be called")
 		}
 		// Synthesise case parameters.
-		parameters := []types.TypeField{{Typ: ref.Case, Nme: ref.Name}}
+		parameters := []types.NamedType{{Typ: ref.Case, Nme: ref.Name}}
 		_, err := a.resolveCallActual(scope, ref.Case, parameters, ast.Call)
 		if err != nil {
 			return nil, err
@@ -905,14 +895,14 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, ast *parse
 		return &types.Value{Typ: ref}, nil
 
 	case *types.ClassType:
-		var parameters []types.TypeField
+		var parameters []types.NamedType
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
 		return a.resolveCallActual(scope, ref, parameters, ast.Call)
 
 	case *types.Enum:
-		var parameters []types.TypeField
+		var parameters []types.NamedType
 		if ref.Init != nil {
 			parameters = ref.Init.Parameters
 		}
@@ -926,7 +916,7 @@ func (a *analyser) resolveCallLike(scope *Scope, ref types.Reference, ast *parse
 	}
 }
 
-func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parameters []types.TypeField, call *parser.Call) (*types.Value, error) {
+func (a *analyser) resolveCallActual(scope *Scope, returnType types.Type, parameters []types.NamedType, call *parser.Call) (*types.Value, error) {
 	if len(parameters) != len(call.Parameters) {
 		return nil, participle.Errorf(call.Pos,
 			"%d parameters provided for function that takes %d parameters",
@@ -961,7 +951,8 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 	}
 }
 
-func (a *analyser) resolveLiteral(scope *Scope, literal *parser.Literal) (types.Reference, error) {
+func (a *analyser) resolveLiteral(scope *Scope, literal *parser.Literal) (ref types.Reference, err error) {
+	defer a.autoAssoc(literal, &ref)
 	switch {
 	case literal.Number != nil:
 		n := big.Float(*literal.Number)
@@ -988,10 +979,10 @@ func (a *analyser) resolveLiteral(scope *Scope, literal *parser.Literal) (types.
 	}
 }
 
-func (a *analyser) resolveArrayLiteral(scope *Scope, array *parser.ArrayLiteral) (types.Reference, error) {
+func (a *analyser) resolveArrayLiteral(scope *Scope, array *parser.ArrayLiteral) (ref types.Reference, err error) {
+	defer a.autoAssoc(array, &ref)
 	var (
 		element types.Reference
-		err     error
 	)
 	for _, v := range array.Values {
 		element, err = a.checkCompoundTypeConsistency(scope, v, element)
@@ -1015,9 +1006,9 @@ func (a *analyser) resolveDictOrSetLiteral(scope *Scope, value *parser.DictOrSet
 	return a.resolveSetLiteral(scope, value)
 }
 
-func (a *analyser) resolveSetLiteral(scope *Scope, set *parser.DictOrSetLiteral) (types.Reference, error) {
+func (a *analyser) resolveSetLiteral(scope *Scope, set *parser.DictOrSetLiteral) (ref types.Reference, err error) {
+	defer a.autoAssoc(set, &ref)
 	var (
-		err     error
 		element types.Reference
 	)
 	for i, v := range set.Entries {
@@ -1035,9 +1026,9 @@ func (a *analyser) resolveSetLiteral(scope *Scope, set *parser.DictOrSetLiteral)
 	return types.Set(element.Type()), nil
 }
 
-func (a *analyser) resolveDictLiteral(scope *Scope, dict *parser.DictOrSetLiteral) (types.Reference, error) {
+func (a *analyser) resolveDictLiteral(scope *Scope, dict *parser.DictOrSetLiteral) (ref types.Reference, err error) {
+	defer a.autoAssoc(dict, &ref)
 	var (
-		err        error
 		key, value types.Reference
 	)
 	for i, v := range dict.Entries {

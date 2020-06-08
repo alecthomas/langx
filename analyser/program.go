@@ -27,7 +27,25 @@ func (p *Program) associate(node parser.Node, ref types.Reference) {
 	p.annotations[node] = ref
 }
 
-// Reference returns the type reference for an AST node (if any).
+// Reference returns the analysis reference for an AST node (if any).
 func (p *Program) Reference(node parser.Node) types.Reference {
 	return p.annotations[node]
+}
+
+// Type returns the type reference for an AST node (if any).
+func (p *Program) Type(node parser.Node) types.Type {
+	t, ok := p.annotations[node].(types.Type)
+	if ok {
+		return t
+	}
+	return nil
+}
+
+// Value returns the value reference for an AST node (if any).
+func (p *Program) Value(node parser.Node) *types.Value {
+	v, ok := p.annotations[node].(*types.Value)
+	if ok {
+		return v
+	}
+	return nil
 }

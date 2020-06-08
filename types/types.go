@@ -9,16 +9,16 @@ import (
 
 type Op = parser.Op
 
-// TypeField represents the field of a type.
-type TypeField struct {
+// NamedType represents the field of a type.
+type NamedType struct {
 	Nme string
 	Typ Type
 }
 
-func (t TypeField) Kind() Kind     { return t.Typ.Kind() }
-func (t TypeField) Type() Type     { return t.Typ.Type() }
-func (t TypeField) String() string { return fmt.Sprintf("%s:%s", t.Nme, t.Typ.String()) }
-func (t TypeField) Name() string   { return t.Nme }
+func (t NamedType) Kind() Kind     { return t.Typ.Kind() }
+func (t NamedType) Type() Type     { return t.Typ.Type() }
+func (t NamedType) String() string { return fmt.Sprintf("%s:%s", t.Nme, t.Typ.String()) }
+func (t NamedType) Name() string   { return t.Nme }
 
 // A Reference is either a Type or a *Value.
 type Reference interface {
@@ -28,7 +28,7 @@ type Reference interface {
 	//
 	// For Types this will always return itself.
 	Type() Type
-	// Fields() []FieldReference
+	// Fields() []NamedReference
 	String() string
 }
 
@@ -54,9 +54,9 @@ type Type interface {
 	// be None.
 	CanApply(op Op, rhs Type) bool
 	// Fields (if any).
-	Fields() []TypeField
+	Fields() []NamedType
 	// Type parameters (if any).
-	TypeParameters() []TypeField
+	TypeParameters() []NamedType
 }
 
 var (
@@ -74,7 +74,7 @@ var (
 
 // A Generic type.
 type Generic struct {
-	Constraints []TypeField
+	Constraints []NamedType
 }
 
 var _ Type = Generic{}
@@ -97,8 +97,8 @@ func (t Generic) Coerce(direction Direction, other Type) Type {
 	return other
 }
 func (t Generic) CanApply(op Op, other Type) bool { return false }
-func (t Generic) Fields() []TypeField             { return t.Constraints }
-func (t Generic) TypeParameters() []TypeField     { return t.Constraints }
+func (t Generic) Fields() []NamedType             { return t.Constraints }
+func (t Generic) TypeParameters() []NamedType     { return t.Constraints }
 func (t Generic) FieldByName(name string) Reference {
 	for _, f := range t.Constraints {
 		if f.Nme == name {
@@ -124,7 +124,7 @@ type MapType struct {
 
 func Map(key, value Type) Type {
 	return &MapType{ClassType{
-		TParams: []TypeField{
+		TParams: []NamedType{
 			{"Key", key},
 			{"Value", value},
 		}},
@@ -141,7 +141,7 @@ type ArrayType struct {
 }
 
 func Array(value Type) Type {
-	return ArrayType{Generic{Constraints: []TypeField{{"Value", value}}}}
+	return ArrayType{Generic{Constraints: []NamedType{{"Value", value}}}}
 }
 
 func (a ArrayType) String() string { return fmt.Sprintf("[%s]", a.Constraints[0].Typ) }
@@ -151,10 +151,10 @@ type SetType struct {
 }
 
 func Set(value Type) Type {
-	return SetType{Generic{Constraints: []TypeField{{"Value", value}}}}
+	return SetType{Generic{Constraints: []NamedType{{"Value", value}}}}
 }
 
-func (s SetType) TypeParameters() []TypeField { return s.Constraints }
+func (s SetType) TypeParameters() []NamedType { return s.Constraints }
 func (s SetType) Type() Type                  { return s }
 func (s SetType) String() string              { return fmt.Sprintf("{%s}", s.Constraints[0].Typ) }
 
@@ -163,7 +163,7 @@ type OptionalType struct {
 }
 
 func Optional(some Type) Type {
-	return &OptionalType{Enum{TParams: []TypeField{
+	return &OptionalType{Enum{TParams: []NamedType{
 		{Nme: "None"},
 		{Nme: "Some", Typ: some},
 	}}}
@@ -190,8 +190,8 @@ func (b Builtin) GoString() string {
 func (b Builtin) Type() Type                        { return b }
 func (b Builtin) Name() string                      { return b.Kind().String() }
 func (b Builtin) Kind() Kind                        { return Kind(b) }
-func (b Builtin) Fields() []TypeField               { return nil }
-func (b Builtin) TypeParameters() []TypeField       { return nil }
+func (b Builtin) Fields() []NamedType               { return nil }
+func (b Builtin) TypeParameters() []NamedType       { return nil }
 func (b Builtin) FieldByName(name string) Reference { return nil }
 func (b Builtin) Coerce(direction Direction, other Type) Type {
 	if b == other || coercionMap[coercionKey{b.Kind(), other.Kind()}] {
@@ -204,7 +204,7 @@ func (b Builtin) CanApply(op Op, other Type) bool {
 }
 
 type Function struct {
-	Parameters []TypeField
+	Parameters []NamedType
 	ReturnType Type
 }
 
@@ -214,8 +214,8 @@ func (f *Function) Type() Type                                  { return f }
 func (f *Function) Kind() Kind                                  { return KindFunc }
 func (f *Function) Coerce(direction Direction, other Type) Type { return nil }
 func (f *Function) CanApply(op Op, other Type) bool             { return false }
-func (f *Function) Fields() []TypeField                         { return nil }
-func (f *Function) TypeParameters() []TypeField                 { return nil }
+func (f *Function) Fields() []NamedType                         { return nil }
+func (f *Function) TypeParameters() []NamedType                 { return nil }
 func (f *Function) FieldByName(name string) Reference           { return nil }
 func (f *Function) String() string {
 	w := &strings.Builder{}
@@ -235,8 +235,8 @@ func (f *Function) String() string {
 
 type ClassType struct {
 	Name    string
-	TParams []TypeField
-	Flds    []TypeField
+	TParams []NamedType
+	Flds    []NamedType
 	Init    *Function
 }
 
@@ -251,8 +251,8 @@ func (s *ClassType) Coerce(direction Direction, other Type) Type {
 	return nil
 }
 func (s *ClassType) CanApply(op Op, other Type) bool { return false }
-func (s *ClassType) Fields() []TypeField             { return s.Flds }
-func (s *ClassType) TypeParameters() []TypeField     { return s.TParams }
+func (s *ClassType) Fields() []NamedType             { return s.Flds }
+func (s *ClassType) TypeParameters() []NamedType     { return s.TParams }
 func (s *ClassType) FieldByName(name string) Reference {
 	for _, fld := range s.Flds {
 		if fld.Nme == name {
@@ -275,14 +275,14 @@ func (c *Case) Type() Type                                  { return c }
 func (c *Case) Kind() Kind                                  { return KindCase }
 func (c *Case) Coerce(direction Direction, other Type) Type { return nil }
 func (c *Case) CanApply(op Op, rhs Type) bool               { return false }
-func (c *Case) Fields() []TypeField                         { return nil }
-func (c *Case) TypeParameters() []TypeField                 { return nil }
+func (c *Case) Fields() []NamedType                         { return nil }
+func (c *Case) TypeParameters() []NamedType                 { return nil }
 func (c *Case) FieldByName(name string) Reference           { return nil }
 func (c *Case) String() string                              { return "case" }
 
 type Specialisation struct {
 	Typ        Type
-	Parameters []TypeField
+	Parameters []NamedType
 }
 
 // Specialise creates a specialisation of a generic type.
@@ -290,9 +290,9 @@ func Specialise(base Type, parameters ...Type) Type {
 	if len(base.TypeParameters()) != len(parameters) {
 		panic("mismatched number of specialised generic parameters")
 	}
-	fields := make([]TypeField, 0, len(parameters))
+	fields := make([]NamedType, 0, len(parameters))
 	for i, p := range base.Fields() {
-		fields = append(fields, TypeField{Nme: p.Nme, Typ: parameters[i]})
+		fields = append(fields, NamedType{Nme: p.Nme, Typ: parameters[i]})
 	}
 	return &Specialisation{
 		Typ:        base,
@@ -302,7 +302,7 @@ func Specialise(base Type, parameters ...Type) Type {
 
 var _ Type = &Specialisation{}
 
-func (s Specialisation) TypeParameters() []TypeField { return nil }
+func (s Specialisation) TypeParameters() []NamedType { return nil }
 func (s Specialisation) FieldByName(name string) Reference {
 	for _, field := range s.Parameters {
 		if field.Nme == name {
@@ -316,12 +316,12 @@ func (s Specialisation) Type() Type                                  { return s.
 func (s Specialisation) String() string                              { return "specialisation" }
 func (s Specialisation) Coerce(direction Direction, other Type) Type { panic("implement me") }
 func (s Specialisation) CanApply(op Op, rhs Type) bool               { return false }
-func (s Specialisation) Fields() []TypeField                         { return s.Parameters }
+func (s Specialisation) Fields() []NamedType                         { return s.Parameters }
 
 type Enum struct {
 	Name    string
-	TParams []TypeField
-	Flds    []TypeField
+	TParams []NamedType
+	Flds    []NamedType
 	Init    *Function
 }
 
@@ -338,7 +338,7 @@ func (e *Enum) Coerce(direction Direction, other Type) Type {
 	}
 	var matched Type
 	for _, cse := range e.Cases() {
-		fmt.Println(cse.Name, cse.Case, other)
+		// fmt.Println(cse.Name, cse.Case, other)
 		if coerced := cse.Case.Coerce(direction, other); coerced != nil {
 			// Already have a match, coercion is ambiguous.
 			if matched != nil {
@@ -351,10 +351,9 @@ func (e *Enum) Coerce(direction Direction, other Type) Type {
 }
 func (e *Enum) CanApply(op Op, other Type) bool {
 	panic(fmt.Sprintf("%s %s", op.String(), other.String()))
-	return false
 }
-func (e *Enum) Fields() []TypeField         { return e.Flds }
-func (e *Enum) TypeParameters() []TypeField { return e.TParams }
+func (e *Enum) Fields() []NamedType         { return e.Flds }
+func (e *Enum) TypeParameters() []NamedType { return e.TParams }
 func (e *Enum) FieldByName(name string) Reference {
 	for _, fld := range e.Flds {
 		if fld.Nme == name {
@@ -429,14 +428,14 @@ func Coerce(from, to Type) Type {
 	return nil
 }
 
-// A FieldReference from a value or type.
-type FieldReference interface {
+// A NamedReference to a value or type.
+type NamedReference interface {
 	Name() string
 	Reference
 }
 
 // FieldByName looks up a value or type's field by name.
-func FieldByName(ref Reference, name string) FieldReference {
+func FieldByName(ref Reference, name string) NamedReference {
 	switch ref := ref.(type) {
 	case *Value:
 		for _, fld := range ref.Fields() {

@@ -240,7 +240,7 @@ type Reference struct {
 
 	Terminal *Terminal      `@@`
 	Next     *ReferenceNext `@@?`
-	Optional bool           `"?"?`
+	Optional bool           `@"?"?`
 }
 
 func (t *Reference) accept(visitor VisitorFunc) error {
@@ -353,6 +353,7 @@ type Literal struct {
 
 	Number    *Number           `  @Number`
 	Str       *string           `| @String`
+	LitStr    *string           `| @LiteralString`
 	Bool      *bool             `| @("true" | "false")`
 	DictOrSet *DictOrSetLiteral `| @@`
 	Array     *ArrayLiteral     `| @@`
@@ -368,6 +369,9 @@ func (l *Literal) accept(visitor VisitorFunc) error {
 			return nil
 
 		case l.Str != nil:
+			return nil
+
+		case l.LitStr != nil:
 			return nil
 
 		case l.Bool != nil:
@@ -392,6 +396,9 @@ func (l *Literal) Describe() string {
 
 	case l.Str != nil:
 		return "string"
+
+	case l.LitStr != nil:
+		return "literal string"
 
 	case l.Bool != nil:
 		return "bool"

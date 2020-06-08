@@ -59,8 +59,8 @@ var _ Reference = &Value{}
 
 func (v *Value) Kind() Kind { return v.Typ.Kind() }
 func (v *Value) Type() Type { return v.Typ }
-func (v *Value) Fields() []FieldReference {
-	var flds []FieldReference
+func (v *Value) Fields() []NamedReference {
+	var flds []NamedReference
 	for _, ft := range v.Type().Fields() {
 		flds = append(flds, Field{Nme: ft.Nme, Value: &Value{
 			Typ:        ft.Typ,
