@@ -3,12 +3,21 @@ package parser
 import (
 	"errors"
 	"reflect"
+
+	"github.com/alecthomas/participle/lexer"
 )
 
 // go-sumtype:decl Node
 
+type Mixin struct {
+	Pos lexer.Position
+}
+
+func (p Mixin) Position() lexer.Position { return p.Pos }
+
 // A Node in the AST.
 type Node interface {
+	Position() lexer.Position
 	accept(visitor VisitorFunc) error
 }
 
@@ -48,6 +57,7 @@ type Visitor interface {
 	VisitEnumDecl(n *EnumDecl) error
 	VisitEnumMember(n *EnumMember) error
 	VisitExpr(n *Expr) error
+	VisitString(n *String) error
 	VisitNew(n *NewExpr) error
 	VisitForStmt(n ForStmt) error
 	VisitFuncDecl(n *FuncDecl) error
@@ -121,6 +131,8 @@ func Visit(node Node, visitor Visitor) error {
 			return maybeNext(visitor.VisitEnumMember(n))
 		case *Expr:
 			return maybeNext(visitor.VisitExpr(n))
+		case *String:
+			return maybeNext(visitor.VisitString(n))
 		case ForStmt:
 			return maybeNext(visitor.VisitForStmt(n))
 		case *FuncDecl:

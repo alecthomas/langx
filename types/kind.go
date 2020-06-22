@@ -24,6 +24,7 @@ const (
 	KindCase          // case
 	KindAlias         // alias
 	KindAny           // any
+	KindInterface     // interface
 )
 
 // IsScalar returns true if the type is a scalar (string, bool, int, float).

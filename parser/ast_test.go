@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/alecthomas/repr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -93,6 +94,7 @@ func TestParse(t *testing.T) {
 		name   string
 		source string
 		fail   string
+		debug  bool
 	}{
 		{name: "ArrayLiteral",
 			source: `
@@ -130,28 +132,34 @@ func TestParse(t *testing.T) {
 		{name: "CompoundEnumCases",
 			source: `
 				// Represents any JSON value.
-				enum Value {
+				enum ResolvedValue {
 					case Number(float)
 					case String(string)
-					case List([Value])
-					case Object({string: Value})
+					case List([ResolvedValue])
+					case Object({string: ResolvedValue})
 				}
 			`},
 		{name: "AnonymousEnum",
 			source: `fn f(): string|int {}`},
+		{name: "InterpolatedString",
+			source: `
+				let a = "Hello {user}, how are you?"
+			`},
 		{name: "FullSource",
 			source: testSource},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := ParseString(test.source)
+			ast, err := ParseString(test.source)
+			if test.debug {
+				repr.Println(ast)
+			}
 			if test.fail != "" {
 				require.EqualError(t, err, test.fail)
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, err, repr.String(ast, repr.Indent("  ")))
 			}
-			// repr.Println(ast)
 		})
 	}
 }

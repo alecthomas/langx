@@ -180,7 +180,7 @@ func (a *analyser) resolveCaseDecl(scope *Scope, enum *types.Enum, decl *parser.
 func (a *analyser) resolveType(scope *Scope, cse *parser.TypeDecl) (types.Type, error) {
 	switch {
 	case cse.Named != nil:
-		typ := scope.ResolveType(cse.Named.Type)
+		typ := a.p.resolveConcreteType(cse, scope, cse.Named.Type)
 		if typ == nil {
 			return nil, participle.Errorf(cse.Pos, "unknown type %q", cse)
 		}
@@ -271,6 +271,7 @@ func (a *analyser) checkClassDecl(scope *Scope, class *parser.ClassDecl) error {
 		}
 	}
 	clst.Flds = a.scopeToTypeFields(classScope)
+	a.p.associate(class, clst)
 	return nil
 }
 
@@ -412,8 +413,11 @@ func (a *analyser) checkStatement(scope *Scope, stmt *parser.Stmt) error {
 
 	case stmt.Block != nil:
 		return a.checkBlock(scope.Sub(nil), stmt.Block)
+
+	case stmt.For != nil:
+		return a.checkForStmt(scope, stmt.For)
 	}
-	panic(stmt.Pos.String())
+	panic("unsupported statement at " + stmt.Pos.String())
 }
 
 func (a *analyser) checkSwitch(scope *Scope, stmt *parser.SwitchStmt) error {
@@ -800,7 +804,7 @@ func (a *analyser) resolveTerminal(scope *Scope, terminal *parser.Terminal) (ref
 		return &types.Value{Typ: typ}, nil
 
 	case terminal.Ident != "":
-		ref := scope.Resolve(terminal.Ident)
+		ref := a.p.resolveConcrete(terminal, scope, terminal.Ident)
 		if ref == nil {
 			return nil, participle.Errorf(terminal.Pos, "unknown symbol %q", terminal.Ident)
 		}
@@ -943,6 +947,7 @@ func (a *analyser) resolveField(scope *Scope, parent types.Reference, terminal *
 		if field == nil {
 			return nil, participle.Errorf(terminal.Pos, "unknown field %s on %s", terminal.Ident, parent)
 		}
+		a.p.associateConcrete(terminal, field)
 		a.p.associate(terminal, field)
 		return field, nil
 
@@ -1125,4 +1130,8 @@ func (a *analyser) checkExprStmtIsFunctionCall(scope *Scope, expr *parser.Unary)
 		return participle.Errorf(expr.Reference.Pos, "statement with no effect")
 	}
 	return nil
+}
+
+func (a *analyser) checkForStmt(scope *Scope, stmt *parser.ForStmt) error {
+	panic("???")
 }

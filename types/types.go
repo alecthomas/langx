@@ -126,7 +126,7 @@ func Map(key, value Type) Type {
 	return &MapType{ClassType{
 		TParams: []NamedType{
 			{"Key", key},
-			{"Value", value},
+			{"ResolvedValue", value},
 		}},
 	}
 }
@@ -141,7 +141,7 @@ type ArrayType struct {
 }
 
 func Array(value Type) Type {
-	return ArrayType{Generic{Constraints: []NamedType{{"Value", value}}}}
+	return ArrayType{Generic{Constraints: []NamedType{{"ResolvedValue", value}}}}
 }
 
 func (a ArrayType) String() string { return fmt.Sprintf("[%s]", a.Constraints[0].Typ) }
@@ -151,7 +151,7 @@ type SetType struct {
 }
 
 func Set(value Type) Type {
-	return SetType{Generic{Constraints: []NamedType{{"Value", value}}}}
+	return SetType{Generic{Constraints: []NamedType{{"ResolvedValue", value}}}}
 }
 
 func (s SetType) TypeParameters() []NamedType { return s.Constraints }
@@ -224,11 +224,11 @@ func (f *Function) String() string {
 		if i > 0 {
 			fmt.Fprint(w, ", ")
 		}
-		fmt.Fprintf(w, "%s %s", param.Name(), param.Type())
+		fmt.Fprintf(w, "%s: %s", param.Name(), param.Type())
 	}
 	fmt.Fprint(w, ")")
 	if f.ReturnType != None {
-		fmt.Fprintf(w, " %s", f.ReturnType)
+		fmt.Fprintf(w, ": %s", f.ReturnType)
 	}
 	return w.String()
 }

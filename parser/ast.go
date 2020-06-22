@@ -21,8 +21,8 @@ var (
 		Keyword = \b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
 		Ident = \b([[:alpha:]_]\w*)\b
 		Number = \b(\d+(\.\d+)?)\b
-		String = "(\\.|[^"])*"|'[^']*'
-		LiteralString = ` + "`.*?`" + `
+		String = "(\\.|[^"])*"
+		LiteralString = ` + "`.*?`|'.*?'" + `
 		Newline = \n
 		Operator = ->|%=|>=|<=|&&|\|\||==|!=
 		Assignment = (\^=|\+=|-=|\*=|/=|\|=|&=|%=|=)
@@ -62,7 +62,7 @@ type Decls interface {
 }
 
 type AST struct {
-	Pos lexer.Position
+	Mixin
 
 	Declarations []*RootDecl `@@*`
 }
@@ -92,7 +92,7 @@ func (a *AST) Decls() []Decl {
 
 // RootDecl is a top-level declaration.
 type RootDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Modifiers Modifiers `@Modifier*`
 
@@ -135,7 +135,7 @@ func (r *RootDecl) Decl() Decl {
 }
 
 type ImportDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Alias  string `"import" @Ident?`
 	Import string `@String`
@@ -148,7 +148,7 @@ func (i *ImportDecl) accept(visitor VisitorFunc) error {
 func (i *ImportDecl) decl() {}
 
 type EnumDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Type    *NamedTypeDecl `"enum" @@ "{"`
 	Members []*EnumMember  `( @@ ( ";" @@ )* ";"? )? "}"`
@@ -182,7 +182,7 @@ func (e *EnumDecl) Decls() []Decl {
 func (e *EnumDecl) decl() {}
 
 type EnumMember struct {
-	Pos lexer.Position
+	Mixin
 
 	Modifiers Modifiers `@Modifier*`
 
@@ -216,7 +216,7 @@ func (e *EnumMember) Decl() Decl {
 }
 
 type CaseDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Name string    `"case" @Ident`
 	Type *TypeDecl `( "(" @@ ")" )?`
@@ -234,7 +234,7 @@ func (c *CaseDecl) accept(visitor VisitorFunc) error {
 func (c *CaseDecl) decl() {}
 
 type ClassDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Type    *NamedTypeDecl `"class" @@ "{"`
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
@@ -268,7 +268,7 @@ func (c *ClassDecl) Decls() []Decl {
 func (c *ClassDecl) decl() {}
 
 type ClassMember struct {
-	Pos lexer.Position
+	Mixin
 
 	Modifiers Modifiers `@Modifier*`
 
@@ -311,7 +311,7 @@ func (c *ClassMember) Decl() Decl {
 }
 
 type InitialiserDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Parameters []*Parameters `"init" "(" ( @@ ( "," @@ )* )? ","? ")"`
 	Throws     bool          `@"throws"?`
@@ -335,7 +335,7 @@ func (i *InitialiserDecl) accept(visitor VisitorFunc) error {
 func (i *InitialiserDecl) decl() {}
 
 type TypeDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Named     *NamedTypeDecl     `  @@`
 	Array     *ArrayTypeDecl     `| @@`
@@ -372,7 +372,7 @@ func (t TypeDecl) accept(visitor VisitorFunc) error {
 
 // DictOrSeyTypeDecl in the form {<type>: <type>} or {<type>}
 type DictOrSetTypeDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Key *TypeDecl `"{" @@`
 	// Dicts and sets both use "{}" as delimiters, so we'll allow intermingling
@@ -404,7 +404,7 @@ func (d *DictOrSetTypeDecl) accept(visitor VisitorFunc) error {
 
 // ArrayTypeDecl in the form [<type>]
 type ArrayTypeDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Element *TypeDecl `"[" @@ "]"`
 }
@@ -426,7 +426,7 @@ func (a *ArrayTypeDecl) accept(visitor VisitorFunc) error {
 }
 
 type NamedTypeDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Type          string           `@Ident`
 	TypeParameter []*TypeParamDecl `( "<" @@ ( "," @@ )* ","? ">" )?`
@@ -459,7 +459,7 @@ func (t *NamedTypeDecl) accept(visitor VisitorFunc) error {
 
 // TypeParamDecl represents a generic type parameter and its optional constraints.
 type TypeParamDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Name        string       `@Ident`
 	Constraints []*Reference `( ":" @@ ( "," @@ )* )?`
@@ -492,7 +492,7 @@ func (t TypeParamDecl) String() string {
 
 // Parameters of a function/constructor declaration.
 type Parameters struct {
-	Pos lexer.Position
+	Mixin
 
 	Names []string   `@Ident ("," @Ident)*`
 	Type  *Reference `":" @@`
@@ -509,7 +509,7 @@ func (p Parameters) accept(visitor VisitorFunc) error {
 
 // VarDecl represents the declaration of new variables.
 type VarDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	// let a, b, c int
 	// let a = 1, b = 2
@@ -534,7 +534,7 @@ func (v *VarDecl) accept(visitor VisitorFunc) error {
 func (v *VarDecl) decl() {}
 
 type VarDeclAsgn struct {
-	Pos lexer.Position
+	Mixin
 
 	Name    string `@Ident`
 	Type    *Expr  `( ":" @@ )?`
@@ -557,7 +557,7 @@ func (v VarDeclAsgn) accept(visitor VisitorFunc) error {
 //
 // Other, invalid, expressions will be flagged during semantic analysis.
 type ExprStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	LHS *Expr `@@`
 	Op  Op    `( @Assignment`
@@ -580,7 +580,7 @@ func (a *ExprStmt) accept(visitor VisitorFunc) error {
 }
 
 type Stmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Return    *ReturnStmt `  @@`
 	If        *IfStmt     `| @@`
@@ -627,7 +627,7 @@ func (s Stmt) accept(visitor VisitorFunc) error {
 }
 
 type Block struct {
-	Pos lexer.Position
+	Mixin
 
 	Statements []*Stmt `"{" ( @@ ( ";" @@ )* ";"? )? "}"`
 }
@@ -647,7 +647,7 @@ func (b Block) accept(visitor VisitorFunc) error {
 }
 
 type ForStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Target *Reference `"for" @@`
 	Source *Expr      `"in" @@`
@@ -673,7 +673,7 @@ func (i ForStmt) accept(visitor VisitorFunc) error {
 }
 
 type IfStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Condition *Expr  `"if" @@`
 	Main      *Block `@@`
@@ -699,7 +699,7 @@ func (i IfStmt) accept(visitor VisitorFunc) error {
 }
 
 type SwitchStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Target *Expr       `"switch" @@ "{"`
 	Cases  []*CaseStmt `@@* "}"`
@@ -723,7 +723,7 @@ func (s SwitchStmt) accept(visitor VisitorFunc) error {
 }
 
 type CaseStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Default bool        `( @"default"`
 	Case    *CaseSelect `  | "case" @@ ) ":"`
@@ -748,7 +748,7 @@ func (c CaseStmt) accept(visitor VisitorFunc) error {
 }
 
 type CaseSelect struct {
-	Pos lexer.Position
+	Mixin
 
 	EnumCase *EnumCase `  @@`
 	ExprCase *Expr     `| @@`
@@ -767,7 +767,7 @@ func (c CaseSelect) accept(visitor VisitorFunc) error {
 }
 
 type EnumCase struct {
-	Pos lexer.Position
+	Mixin
 
 	Case string `"." @Ident`
 	Var  string `( "(" @Ident ")" )?`
@@ -778,7 +778,7 @@ func (e EnumCase) accept(visitor VisitorFunc) error {
 }
 
 type ReturnStmt struct {
-	Pos lexer.Position
+	Mixin
 
 	Value *Expr `"return" @@?`
 }
@@ -793,7 +793,7 @@ func (r ReturnStmt) accept(visitor VisitorFunc) error {
 }
 
 type FuncDecl struct {
-	Pos lexer.Position
+	Mixin
 
 	Name       string        `"fn" @Ident "("`
 	Parameters []*Parameters `( @@ ( "," @@ )* )? ","? ")"`

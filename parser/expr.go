@@ -3,16 +3,19 @@ package parser
 import (
 	"fmt"
 	"math/big"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
+	"github.com/pkg/errors"
 )
 
 // Expr represents an expression.
 type Expr struct {
-	Pos lexer.Position
+	Mixin
 
-	// Either Unary or Op+left+Right will be present.
+	// Either Unary or Op + Left + Right will be present.
 	Unary *Unary
 
 	Left  *Expr
@@ -83,7 +86,7 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		expr := &Expr{Pos: token.Pos}
+		expr := &Expr{Mixin: Mixin{token.Pos}}
 		if token.Type != operatorToken && token.Type != singleOperatorToken {
 			break
 		}
@@ -112,16 +115,16 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 
 func parseOperand(lex *lexer.PeekingLexer) (*Expr, error) {
 	pos := peekPos(lex)
-	u := &Unary{Pos: pos}
+	u := &Unary{Mixin: Mixin{pos}}
 	err := unaryParser.ParseFromLexer(lex, u, participle.AllowTrailing(true))
 	if err != nil {
 		return nil, err
 	}
-	return &Expr{Pos: pos, Unary: u}, nil
+	return &Expr{Mixin: Mixin{pos}, Unary: u}, nil
 }
 
 type Unary struct {
-	Pos lexer.Position
+	Mixin
 
 	Op        Op         `@( "!" | "-" )?`
 	Reference *Reference `@@`
@@ -144,6 +147,8 @@ func (u *Unary) String() string {
 }
 
 type InitParameter struct {
+	Mixin
+
 	Name  string `@Ident`
 	Value *Expr  `"=" @@`
 }
@@ -158,6 +163,8 @@ func (i *InitParameter) accept(visitor VisitorFunc) error {
 }
 
 type NewExpr struct {
+	Mixin
+
 	Type *Reference       `"new" @@`
 	Init []*InitParameter `( "(" ( @@ ( "," @@ )* ","? )? ")" )?`
 }
@@ -180,7 +187,7 @@ func (n *NewExpr) accept(visitor VisitorFunc) error {
 }
 
 type Terminal struct {
-	Pos lexer.Position
+	Mixin
 
 	Tuple   []*Expr  `  "(" @@ ( "," @@ )* ")"`
 	New     *NewExpr `| @@`
@@ -217,7 +224,7 @@ func (t Terminal) accept(visitor VisitorFunc) error {
 	})
 }
 
-func (t Terminal) Describe() string {
+func (t *Terminal) Describe() string {
 	switch {
 	case t.New != nil:
 		return "new"
@@ -236,7 +243,7 @@ func (t Terminal) Describe() string {
 
 // A Reference to a value or a type.
 type Reference struct {
-	Pos lexer.Position
+	Mixin
 
 	Terminal *Terminal      `@@`
 	Next     *ReferenceNext `@@?`
@@ -267,7 +274,7 @@ func (t *Reference) Describe() string {
 }
 
 type ReferenceNext struct {
-	Pos lexer.Position
+	Mixin
 
 	Subscript      *Expr        `(   "[" @@ "]"`
 	Reference      *Terminal    `  | "." @@`
@@ -348,13 +355,86 @@ func (n *Number) Capture(values []string) error {
 	return nil
 }
 
+// String with interpolated expressions.
+//
+// eg.
+//
+//    "A string with expressions {1 + 2 / 3} {function()} calls and {variables}."
+type String struct {
+	Mixin
+
+	Fragments []StringFragment
+}
+
+func (s *String) Capture(values []string) error {
+	// This just isn't robust - it needs proper support in Participle.
+	// For example the string "Foo {"bar"}" will error.
+	str := values[0]
+	frag := ""
+	for str != "" {
+		rn, size := utf8.DecodeRuneInString(str)
+		str = str[size:]
+		if rn != '{' {
+			frag += string(rn)
+			continue
+		}
+		if frag != "" {
+			s.Fragments = append(s.Fragments, StringFragment{String: frag})
+			frag = ""
+		}
+		// This whole thing is a bit sketchy and I expect it will panic
+		// if the expression is invalid :\
+		l, _ := lex.Lex(strings.NewReader(str))
+		pl, _ := lexer.Upgrade(l)
+		expr, _ := parseExpr(pl, 0)
+		t, _ := pl.Next()
+		if t.Value != "}" {
+			return errors.New("invalid interpolated string")
+		}
+		s.Fragments = append(s.Fragments, StringFragment{Expr: expr})
+		str = str[t.Pos.Offset+1:]
+	}
+	if frag != "" {
+		s.Fragments = append(s.Fragments, StringFragment{String: frag})
+	}
+	return nil
+}
+
+func (s *String) accept(visitor VisitorFunc) error {
+	return visitor(s, func(err error) error {
+		if err != nil {
+			return err
+		}
+		for _, frag := range s.Fragments {
+			if frag.Expr != nil {
+				if err = VisitFunc(frag.Expr, visitor); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
+type StringFragment struct {
+	String string
+	Expr   *Expr
+}
+
+type Bool bool
+
+func (b *Bool) Capture(values []string) error {
+	*b = values[0] == "true"
+	return nil
+}
+
 type Literal struct {
-	Pos lexer.Position
+	Mixin
 
 	Number    *Number           `  @Number`
-	Str       *string           `| @String`
+	Str       *String           `| @String`
 	LitStr    *string           `| @LiteralString`
-	Bool      *bool             `| @("true" | "false")`
+	Bool      *Bool             `| @("true" | "false")`
 	DictOrSet *DictOrSetLiteral `| @@`
 	Array     *ArrayLiteral     `| @@`
 }
@@ -369,7 +449,7 @@ func (l *Literal) accept(visitor VisitorFunc) error {
 			return nil
 
 		case l.Str != nil:
-			return nil
+			return VisitFunc(l.Str, visitor)
 
 		case l.LitStr != nil:
 			return nil
@@ -418,7 +498,7 @@ func (l *Literal) Describe() string {
 }
 
 type DictOrSetLiteral struct {
-	Pos lexer.Position
+	Mixin
 
 	Entries []*DictOrSetEntryLiteral `"{" @@ ( "," @@ )* ","? "}"`
 }
@@ -439,7 +519,7 @@ func (d DictOrSetLiteral) accept(visitor VisitorFunc) error {
 
 // DictOrSetEntryLiteral in the form {"key0": 1, "key1": 2} or {1, 2, 3}
 type DictOrSetEntryLiteral struct {
-	Pos lexer.Position
+	Mixin
 
 	Key *Expr `@@`
 	// Dicts and sets both use "{}" as delimiters, so we'll allow intermingling
@@ -464,7 +544,7 @@ func (d DictOrSetEntryLiteral) accept(visitor VisitorFunc) error {
 
 // ArrayLiteral in the form [1, 2, 3]
 type ArrayLiteral struct {
-	Pos lexer.Position
+	Mixin
 
 	Values []*Expr `"[" ( @@ ( "," @@ )* )? ","? "]"`
 }
@@ -485,13 +565,13 @@ func (a ArrayLiteral) accept(visitor VisitorFunc) error {
 
 // ClassLiteral in the form {field:value, field:value, ...)
 type ClassLiteral struct {
-	Pos lexer.Position
+	Mixin
 
 	Fields []*ClassLiteralField `"{" ( @@ ( "," @@ )* )? ","? "}"`
 }
 
 type ClassLiteralField struct {
-	Pos lexer.Position
+	Mixin
 
 	Key string `@Ident ":"`
 
@@ -500,7 +580,7 @@ type ClassLiteralField struct {
 }
 
 type Call struct {
-	Pos lexer.Position
+	Mixin
 
 	Parameters []*Expr `"(" ( @@ ( "," @@ )* )? ","? ")"`
 }

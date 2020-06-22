@@ -59,6 +59,7 @@ type generator struct {
 func (g *generator) genProgram(p *parser.AST) (Node, error) {
 	root := List{
 		ID("module"),
+		List{ID("memory"), List{ID("export"), String("memory")}, Int(1)},
 	}
 	_ = parser.VisitFunc(p, g.buildDataTable(&root))
 	for _, decl := range p.Decls() {
@@ -67,7 +68,7 @@ func (g *generator) genProgram(p *parser.AST) (Node, error) {
 			return nil, err
 		}
 		if sdecl != nil {
-			root.Add(sdecl)
+			root.Add(sdecl...)
 		}
 	}
 	return root, nil
@@ -76,40 +77,47 @@ func (g *generator) genProgram(p *parser.AST) (Node, error) {
 // Collect all constant strings into global tables.
 func (g *generator) buildDataTable(root *List) parser.VisitorFunc {
 	consts := 0
+	addGlobal := func(lit *parser.Literal, str string) {
+		root.Add(List{
+			ID("data"),
+			List{ID("i32.const"), Int(consts)},
+			String(str),
+		})
+		g.constants[lit] = consts
+		consts += len(str)
+	}
 	return func(node parser.Node, next parser.Next) error {
 		lit, ok := node.(*parser.Literal)
 		if !ok {
 			return next(nil)
 		}
-		var str *string
-		if lit.Str != nil {
-			str = lit.Str
-		} else if lit.LitStr != nil {
-			str = lit.LitStr
-		} else {
-			return next(nil)
+		switch {
+		case lit.LitStr != nil:
+			addGlobal(lit, *lit.LitStr)
+
+		case lit.Str != nil:
+			for _, frag := range lit.Str.Fragments {
+				if frag.String != "" {
+					addGlobal(lit, frag.String)
+				}
+			}
 		}
-		root.Add(List{
-			ID("data"),
-			List{ID("i32.const"), Int(consts)},
-			String(*str),
-		})
-		g.constants[lit] = consts
-		consts += len(*str)
 		return next(nil)
 	}
 }
 
-func (g *generator) genDecl(parent *types.NamedType, decl parser.Decl) (Node, error) {
+func (g *generator) genDecl(parent *types.NamedType, decl parser.Decl) (List, error) {
 	prefix := ""
 	if parent != nil {
 		prefix = parent.Name() + "."
 	}
 	switch decl := decl.(type) {
 	case *parser.FuncDecl:
+		id := prefix + decl.Name
 		fs := List{
 			ID("func"),
-			Var(prefix + decl.Name),
+			Var(id),
+			List{ID("export"), String(id)},
 		}
 		for _, p := range decl.Parameters {
 			ps, err := g.genParams(p)
@@ -120,18 +128,24 @@ func (g *generator) genDecl(parent *types.NamedType, decl parser.Decl) (Node, er
 				fs.Add(p)
 			}
 		}
-		fs.Add(List{
-			ID("result"),
-			g.typeForExpr(decl.Return),
-		})
+		if decl.Return != nil {
+			fs.Add(List{
+				ID("result"),
+				g.typeForExpr(decl.Return),
+			})
+		}
 		fs = append(fs, g.genBlock(decl.Body)...)
-		return fs, nil
+		return List{fs}, nil
 
 	case *parser.VarDecl:
+		for _, v := range decl.Vars {
+			typ := g.program.Resolved(v).Type()
+			fmt.Println(v.Name, typ)
+		}
 		return nil, nil
 
 	case *parser.ClassDecl:
-		typ := g.program.Type(decl)
+		typ := g.program.ResolvedType(decl)
 		if typ == nil {
 			panic(fmt.Sprintf("%T", decl))
 		}
@@ -179,7 +193,10 @@ func (g *generator) typeForUnary(unary *parser.Unary) Node {
 }
 
 func (g *generator) typeForRef(r *parser.Reference) Node {
-	return g.typeForTerm(r.Terminal)
+	ref := g.program.Resolved(r.Terminal)
+	fmt.Printf("%s\n", ref)
+	term := g.typeForTerm(r.Terminal)
+	return term
 }
 
 func (g *generator) typeForTerm(t *parser.Terminal) Node {
@@ -191,6 +208,9 @@ func (g *generator) typeForTerm(t *parser.Terminal) Node {
 
 		case "float":
 			return ID("f64")
+
+		case "bool":
+			return ID("i32")
 
 		default:
 			panic(t.Describe())
@@ -211,32 +231,72 @@ func (g *generator) genBlock(body *parser.Block) List {
 func (g *generator) genStmt(stmt *parser.Stmt) List {
 	switch {
 	case stmt.Return != nil:
-		return g.genExpr(stmt.Return.Value)
+		out := List{}
+		out.Add(g.genExpr(stmt.Return.Value))
+		out.Add(ID("return"))
+		return out
+
+	case stmt.If != nil:
+		name := UVar(stmt.If)
+		out := List{
+			ID("block"), name,
+		}
+		out.Add(g.genExpr(stmt.If.Condition))
+		out.Add(ID("br_if"), name)
+		if stmt.If.Else != nil {
+			out.Add(g.genBlock(stmt.If.Else)...)
+			out.Add(ID("br_if"), name)
+		} else {
+			out.Add(g.genBlock(stmt.If.Main)...)
+		}
+		out.Add(ID("end"), name)
+		return out
+
 	default:
-		panic(fmt.Sprintf("%T", stmt))
+		panic(fmt.Sprintf("%#v", stmt))
 	}
 }
 
 func (g *generator) genExpr(value *parser.Expr) List {
-	ref := g.program.Reference(value)
-	if ref == nil {
-		panic("??")
+	typ := ""
+	if value.Left != nil {
+		typ = g.typeRef(g.program.Resolved(value.Left))
 	}
 	out := List{}
-	if value.Left != nil {
-		out.Add(g.genExpr(value.Left)...)
-	}
-	if value.Right != nil {
-		out.Add(g.genExpr(value.Right)...)
-	}
-	if value.Unary != nil {
-		out.Add(g.genUnary(value.Unary)...)
-	}
-	typ := g.typeRef(ref)
 	switch value.Op {
 	case 0:
 	case parser.OpAdd:
 		out.Add(ID(typ + ".add"))
+
+	case parser.OpGt:
+		out.Add(ID(typ + ".gt_s"))
+
+	case parser.OpLt:
+		out.Add(ID(typ + ".lt_s"))
+
+	case parser.OpGe:
+		out.Add(ID(typ + ".ge_s"))
+
+	case parser.OpLe:
+		out.Add(ID(typ + ".le_s"))
+
+	case parser.OpEq:
+		out.Add(ID(typ + ".eq"))
+
+	case parser.OpNe:
+		out.Add(ID(typ + ".ne"))
+
+	default:
+		panic(value.Op.GoString())
+	}
+	if value.Left != nil {
+		out.Add(g.genExpr(value.Left))
+	}
+	if value.Right != nil {
+		out.Add(g.genExpr(value.Right))
+	}
+	if value.Unary != nil {
+		out.Add(g.genUnary(value.Unary)...)
 	}
 	return out
 }
@@ -278,6 +338,12 @@ func (g *generator) genLiteral(literal *parser.Literal) List {
 			Int(n),
 		}
 
+	case literal.Bool != nil:
+		if *literal.Bool {
+			return List{ID("i32.const"), Int(1)}
+		}
+		return List{ID("i32.const"), Int(0)}
+
 	default:
 		panic(literal.Describe())
 	}
@@ -285,11 +351,11 @@ func (g *generator) genLiteral(literal *parser.Literal) List {
 
 func (g *generator) typeRef(ref types.Reference) string {
 	switch ref.Kind() {
-	case types.KindInt:
+	case types.KindInt, types.KindLiteralInt:
 		return "i64"
-	case types.KindFloat:
+	case types.KindFloat, types.KindLiteralFloat:
 		return "f64"
-	case types.KindString, types.KindClass:
+	case types.KindString, types.KindClass, types.KindBool:
 		return "i32"
 	default:
 		panic(ref.Kind().String())

@@ -2,12 +2,15 @@ package wat
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io"
 	"strconv"
+
+	"github.com/alecthomas/langx/parser"
 )
 
 var oneEntryPerLine = map[string]bool{
-	"module": true, "func": true, "block": true,
+	"module": true, "func": true,
 }
 
 // Write Node to w.
@@ -45,6 +48,14 @@ func (i ID) write(indent string, w io.Writer) { w.Write([]byte(i)) }
 
 // Var is a "$var" s-expression node.
 type Var string
+
+// UVar returns a unique Var for the given node.
+//
+// The Var is stable with regard to the position of the node.
+func UVar(node parser.Node) Var {
+	h := fnv.New32a().Sum([]byte(node.Position().String()))
+	return Var(fmt.Sprintf("_%x", h))
+}
 
 func (r Var) write(indent string, w io.Writer) { w.Write([]byte("$" + r)) }
 

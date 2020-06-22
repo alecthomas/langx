@@ -24,11 +24,12 @@ func _() {
 	_ = x[KindCase-13]
 	_ = x[KindAlias-14]
 	_ = x[KindAny-15]
+	_ = x[KindInterface-16]
 }
 
-const _Kind_name = "nonegenericfunctionliteral intliteral floatliteral stringstringboolintfloattupleclassenumcasealiasany"
+const _Kind_name = "nonegenericfunctionliteral intliteral floatliteral stringstringboolintfloattupleclassenumcasealiasanyinterface"
 
-var _Kind_index = [...]uint8{0, 4, 11, 19, 30, 43, 57, 63, 67, 70, 75, 80, 85, 89, 93, 98, 101}
+var _Kind_index = [...]uint8{0, 4, 11, 19, 30, 43, 57, 63, 67, 70, 75, 80, 85, 89, 93, 98, 101, 110}
 
 func (i Kind) String() string {
 	if i < 0 || i >= Kind(len(_Kind_index)-1) {

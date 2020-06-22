@@ -580,7 +580,7 @@ func TestAnalyser(t *testing.T) {
 					case String(string)
 				}
 
-				enum Value {
+				enum ResolvedValue {
 					case Scalar(Scalar)
 					case List([Scalar])
 					case Hash({string: Scalar})
@@ -603,7 +603,7 @@ func TestAnalyser(t *testing.T) {
 				"a": ref{&types.Value{Typ: types.Map(types.String, types.Int), Properties: types.Assignable}, nil},
 				"b": ref{&types.Value{Typ: &types.Enum{Name: "Enum"}, Properties: types.Assignable}, nil},
 				"c": ref{&types.Value{Typ: &types.ClassType{Name: "ClassType"}, Properties: types.Assignable}, nil},
-				// "d": ref{&types.Value{Typ: &types.ClassType{
+				// "d": ref{&types.ResolvedValue{Typ: &types.ClassType{
 				// 	TParams: []types.NamedType{
 				// 		{Nme: "T"},
 				// 	},
