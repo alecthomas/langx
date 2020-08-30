@@ -22,38 +22,6 @@ can be called asynchronously. The downside of its model is that there are no
 guarantees around concurrent access - each type must manage its own synchronisation
 manually. How do we solve this?
 
-### Immutable values?
-
-All values are immutable. However to improve ergonomics any mutating operations will 
-automatically perform a copy. In reality the implementation should avoid copies 
-wherever possible while maintaining the semantics of immutability.
-
-Each parameter has two potential taints:
-
-1. A mutation taint that states whether the function mutates the 
-   parameter value.
-2. An asynchronous taint that states whether the parameter is passed to an
-   asynchronous construct.
-   
-Taints are transitive.
-
-```
-// This function does not mutate "s", does not pass "s" to any functions that do,
-// and does not create any threads referencing "s". This guarantees that dump() is
-// pure and synchronous.
-fn dump(s Stack<string>) {
-    for v in s {
-        println(v)
-    }
-}
-
-let a = new Stack<string>()
-a.push("a")     // Mutate.
-dump(a)         // Reference (synchronous+pure).
-go dump(a)      // Copy (asynchronous).
-a.x = 1.11      // Mutate.
-```
-
 ### Automatic ownership management
 
 Like Rust, but without the boilerplate. Similar to [D](https://dlang.org/blog/2019/07/15/ownership-and-borrowing-in-d/).
@@ -62,8 +30,29 @@ Rules:
 
 1. Any value passed to an asynchronous construct will have its ownership transferred.
 2. The `copy` operator creates a clone of a value.
-3. Sub-values of compound types (fields, array values, etc.) cannot be transferred,
-   only standalone values.
+
+eg.
+
+```
+interface Component {
+    fn kind(): int
+}
+
+class ECS {
+    let components = new {int: [Component|None]}
+
+    pub fn assign<C>(id: int, component: C) {
+        let kind = component.kind()
+        for components[kind].len() <= id {
+            components[kind].append(None)
+        }
+        components[kind][id] = component
+    }
+
+    pub fn each<C...>(iter fn(id:int))) {
+    }
+}
+```
    
 ### [Active Object](https://en.wikipedia.org/wiki/Active_object)
 

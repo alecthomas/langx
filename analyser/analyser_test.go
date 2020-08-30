@@ -656,6 +656,27 @@ func TestAnalyser(t *testing.T) {
 					}}, nil},
 			},
 		},
+		{name: `GenericAmbiguity`,
+			input: `
+				class Pair<A, B> {
+					let a: A
+					let b: B
+				}
+
+				fn add(a, b: int): int {
+					return a + b
+				}
+
+				fn main() {
+					// This can either be either:
+					//
+					// 1. A tuple of ((Pair<string), (int>1))
+					// 2. Generic instantiation of Pair<string, int>(1).
+					//
+					// Currently only the latter is supported.
+					let a = add(Pair<string, int>(1))
+				}
+			`},
 	}
 
 	for _, test := range tests {
