@@ -7,28 +7,30 @@ import (
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
-	"github.com/alecthomas/participle/lexer/regex"
+	"github.com/alecthomas/participle/lexer/stateful"
 )
 
 var (
 	// Note: "lex" is in this file to ensure correct initialisation ordering.
-	lex = lexer.Must(regex.New(`
-		comment = //.*|(?s:/\*.*?\*/)
-		backslash = \\
-		whitespace = [\r\t ]+
-	
-		Modifier = \b(pub|override|static)\b
-		Keyword = \b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b
-		Ident = \b([[:alpha:]_]\w*)\b
-		Number = \b(\d+(\.\d+)?)\b
-		String = "(\\.|[^"])*"
-		LiteralString = ` + "`.*?`|'.*?'" + `
-		Newline = \n
-		Operator = ->|%=|>=|<=|&&|\|\||==|!=
-		Assignment = (\^=|\+=|-=|\*=|/=|\|=|&=|%=|=)
-		SingleOperator = [-+*/<>%^!|&]
-		Punct = []` + "`" + `~[()@#${}:;?.,]
-	`))
+	lex = lexer.Must(stateful.New(stateful.Rules{
+		"Root": {
+			{"comment", `//.*|(?s:/\*.*?\*/)`, nil},
+			{"backslash", `\\`, nil},
+			{"whitespace", `[\r\t ]+`, nil},
+
+			{"Modifier", `\b(pub|override|static)\b`, nil},
+			{"Keyword", `\b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b`, nil},
+			{"Ident", `\b([[:alpha:]_]\w*)\b`, nil},
+			{"Number", `\b(\d+(\.\d+)?)\b`, nil},
+			{"String", `"(\\.|[^"])*"`, nil},
+			{"LiteralString", `` + "`.*?`|'.*?'" + ``, nil},
+			{"Newline", `\n`, nil},
+			{"Operator", `->|%=|>=|<=|&&|\|\||==|!=`, nil},
+			{"Assignment", `(\^=|\+=|-=|\*=|/=|\|=|&=|%=|=)`, nil},
+			{"SingleOperator", `[-+*/<>%^!|&]`, nil},
+			{"Punct", `[]` + "`" + `~[()@#${}:;?.,]`, nil},
+		}},
+	))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
