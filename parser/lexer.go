@@ -50,7 +50,7 @@ next:
 
 		default:
 			switch l.last.Type {
-			case numberToken, stringToken, identToken:
+			case numberToken, stringEndToken, identToken:
 				token.Value = ";"
 				token.Type = ';'
 

@@ -22,30 +22,40 @@ var (
 			{"Keyword", `\b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b`, nil},
 			{"Ident", `\b([[:alpha:]_]\w*)\b`, nil},
 			{"Number", `\b(\d+(\.\d+)?)\b`, nil},
-			{"String", `"(\\.|[^"])*"`, nil},
+			{"String", `"`, stateful.Push("String")},
 			{"LiteralString", `` + "`.*?`|'.*?'" + ``, nil},
 			{"Newline", `\n`, nil},
 			{"Operator", `->|%=|>=|<=|&&|\|\||==|!=`, nil},
 			{"Assignment", `(\^=|\+=|-=|\*=|/=|\|=|&=|%=|=)`, nil},
 			{"SingleOperator", `[-+*/<>%^!|&]`, nil},
 			{"Punct", `[]` + "`" + `~[()@#${}:;?.,]`, nil},
-		}},
-	))
+		},
+		"String": {
+			{"Escaped", `\\.`, nil},
+			{"StringEnd", `"`, stateful.Pop()},
+			{"Expr", `{`, stateful.Push("StringExpr")},
+			{"Chars", `[^{"\\]+`, nil},
+		},
+		"StringExpr": {
+			{"ExprEnd", `}`, stateful.Pop()},
+			stateful.Include("Root"),
+		},
+	}))
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
 		unquoteLiteral(),
-		participle.Unquote(),
+		// participle.Unquote(),
 	)
 	unaryParser = participle.MustBuild(&Unary{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
 		unquoteLiteral(),
-		participle.Unquote(),
+		// participle.Unquote(),
 	)
 
 	identToken          = lex.Symbols()["Ident"]
-	stringToken         = lex.Symbols()["String"]
+	stringEndToken      = lex.Symbols()["StringEnd"]
 	numberToken         = lex.Symbols()["Number"]
 	operatorToken       = lex.Symbols()["Operator"]
 	singleOperatorToken = lex.Symbols()["SingleOperator"]
@@ -139,8 +149,8 @@ func (r *RootDecl) Decl() Decl {
 type ImportDecl struct {
 	Mixin
 
-	Alias  string `"import" @Ident?`
-	Import string `@String`
+	Alias  string  `"import" @Ident?`
+	Import *String `@@`
 }
 
 func (i *ImportDecl) accept(visitor VisitorFunc) error {

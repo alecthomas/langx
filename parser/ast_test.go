@@ -143,7 +143,7 @@ func TestParse(t *testing.T) {
 			source: `fn f(): string|int {}`},
 		{name: "InterpolatedString",
 			source: `
-				let a = "Hello {user}, how are you?"
+				let a = "Hello {user + "{name()}"}, how are you?"
 			`},
 		{name: "FullSource",
 			source: testSource},

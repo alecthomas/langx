@@ -3,12 +3,9 @@ package parser
 import (
 	"fmt"
 	"math/big"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/alecthomas/participle"
 	"github.com/alecthomas/participle/lexer"
-	"github.com/pkg/errors"
 )
 
 // Expr represents an expression.
@@ -363,41 +360,7 @@ func (n *Number) Capture(values []string) error {
 type String struct {
 	Mixin
 
-	Fragments []StringFragment
-}
-
-func (s *String) Capture(values []string) error {
-	// This just isn't robust - it needs proper support in Participle.
-	// For example the string "Foo {"bar"}" will error.
-	str := values[0]
-	frag := ""
-	for str != "" {
-		rn, size := utf8.DecodeRuneInString(str)
-		str = str[size:]
-		if rn != '{' {
-			frag += string(rn)
-			continue
-		}
-		if frag != "" {
-			s.Fragments = append(s.Fragments, StringFragment{String: frag})
-			frag = ""
-		}
-		// This whole thing is a bit sketchy and I expect it will panic
-		// if the expression is invalid :\
-		l, _ := lex.Lex(strings.NewReader(str))
-		pl, _ := lexer.Upgrade(l)
-		expr, _ := parseExpr(pl, 0)
-		t, _ := pl.Next()
-		if t.Value != "}" {
-			return errors.New("invalid interpolated string")
-		}
-		s.Fragments = append(s.Fragments, StringFragment{Expr: expr})
-		str = str[t.Pos.Offset+1:]
-	}
-	if frag != "" {
-		s.Fragments = append(s.Fragments, StringFragment{String: frag})
-	}
-	return nil
+	Fragments []*StringFragment `"\"" @@* "\""`
 }
 
 func (s *String) accept(visitor VisitorFunc) error {
@@ -417,8 +380,9 @@ func (s *String) accept(visitor VisitorFunc) error {
 }
 
 type StringFragment struct {
-	String string
-	Expr   *Expr
+	Escaped string `(  @Escaped`
+	Expr    *Expr  ` | "{" @@ "}"`
+	String  string ` | @Chars)`
 }
 
 type Bool bool
@@ -432,7 +396,7 @@ type Literal struct {
 	Mixin
 
 	Number    *Number           `  @Number`
-	Str       *String           `| @String`
+	Str       *String           `| @@`
 	LitStr    *string           `| @LiteralString`
 	Bool      *Bool             `| @("true" | "false")`
 	DictOrSet *DictOrSetLiteral `| @@`

@@ -29,7 +29,7 @@ func TestLexer(t *testing.T) {
 		actual = append(actual, token.Value)
 	}
 	expected := []string{
-		"fn", "foo", "(", ")", "{", "if", "true", "{", "print", "(", "hello", ")", ";", "}", ";", "a", "+=",
+		"fn", "foo", "(", ")", "{", "if", "true", "{", "print", "(", "\"", "hello", "\"", ")", ";", "}", ";", "a", "+=",
 		"1", "+", "2", ";", "b", "=", "literal string", "}", ";", "",
 	}
 	require.Equal(t, expected, actual)
