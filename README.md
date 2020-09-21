@@ -396,6 +396,25 @@ let a: {string}         // Explicitly typed.
 let a = {"hello"}        // Type inference.
 ```
 
+## Range
+
+Syntactic sugar for a range type? Used for slices, for loops, etc.
+
+```
+// Equivalent.
+let a = 1..3
+let a = new Range<int>(1, 3)
+
+let b = [1, 2, 3, 4, 5, 6]
+
+// Equivalent.
+let c = b[1..3] 
+let c = b[a]
+
+for n in 1..10 {
+}
+```
+
 ## Type aliases?
 
 Creates an alias for an existing type, with its own set of methods etc.
