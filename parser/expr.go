@@ -20,22 +20,8 @@ type Expr struct {
 	Right *Expr
 }
 
-func (e *Expr) accept(visitor VisitorFunc) error {
-	return visitor(e, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if e.Unary != nil {
-			return VisitFunc(e.Unary, visitor)
-		}
-		if err = VisitFunc(e.Left, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(e.Right, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (e *Expr) children() (children []Node) {
+	return []Node{e.Unary, e.Left, e.Right}
 }
 
 func (e *Expr) String() string {
@@ -127,13 +113,8 @@ type Unary struct {
 	Reference *Reference `@@`
 }
 
-func (u *Unary) accept(visitor VisitorFunc) error {
-	return visitor(u, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(u.Reference, visitor)
-	})
+func (u *Unary) children() (children []Node) {
+	return []Node{u.Reference}
 }
 
 func (u *Unary) String() string {
@@ -150,13 +131,8 @@ type InitParameter struct {
 	Value *Expr  `"=" @@`
 }
 
-func (i *InitParameter) accept(visitor VisitorFunc) error {
-	return visitor(i, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(i.Value, visitor)
-	})
+func (i *InitParameter) children() (children []Node) {
+	return []Node{i.Value}
 }
 
 type NewExpr struct {
@@ -166,21 +142,12 @@ type NewExpr struct {
 	Init []*InitParameter `( "(" ( @@ ( "," @@ )* ","? )? ")" )?`
 }
 
-func (n *NewExpr) accept(visitor VisitorFunc) error {
-	return visitor(n, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(n.Type, visitor); err != nil {
-			return err
-		}
-		for _, param := range n.Init {
-			if err = VisitFunc(param, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (n *NewExpr) children() (children []Node) {
+	children = []Node{n.Type}
+	for _, param := range n.Init {
+		children = append(children, param)
+	}
+	return
 }
 
 type Terminal struct {
@@ -192,33 +159,12 @@ type Terminal struct {
 	Ident   string   `| @Ident`
 }
 
-func (t Terminal) accept(visitor VisitorFunc) error {
-	return visitor(t, func(err error) error {
-		if err != nil {
-			return err
-		}
-		switch {
-		case t.Tuple != nil:
-			for _, e := range t.Tuple {
-				if err = VisitFunc(e, visitor); err != nil {
-					return err
-				}
-			}
-
-		case t.Literal != nil:
-			return VisitFunc(t.Literal, visitor)
-
-		case t.New != nil:
-			return VisitFunc(t.New, visitor)
-
-		case t.Ident != "":
-			return nil
-
-		default:
-			panic("??")
-		}
-		return nil
-	})
+func (t *Terminal) children() (children []Node) {
+	for _, tup := range t.Tuple {
+		children = append(children, tup)
+	}
+	children = append(children, t.New, t.Literal)
+	return
 }
 
 func (t *Terminal) Describe() string {
@@ -247,19 +193,8 @@ type Reference struct {
 	Optional bool           `@"?"?`
 }
 
-func (t *Reference) accept(visitor VisitorFunc) error {
-	return visitor(t, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(t.Terminal, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(t.Next, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (t *Reference) children() (children []Node) {
+	return []Node{t.Terminal, t.Next}
 }
 
 func (t *Reference) Describe() string {
@@ -281,30 +216,12 @@ type ReferenceNext struct {
 	Next *ReferenceNext `@@?`
 }
 
-func (r *ReferenceNext) accept(visitor VisitorFunc) error {
-	return visitor(r, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(r.Subscript, visitor); err != nil {
-			return err
-		}
-		for _, ref := range r.Specialisation {
-			if err = VisitFunc(ref, visitor); err != nil {
-				return err
-			}
-		}
-		if err = VisitFunc(r.Reference, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(r.Call, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(r.Next, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (r *ReferenceNext) children() (children []Node) {
+	children = []Node{r.Subscript, r.Reference}
+	for _, spec := range r.Specialisation {
+		children = append(children, spec)
+	}
+	return append(children, r.Call, r.Next)
 }
 
 func (r *ReferenceNext) Describe() string {
@@ -363,26 +280,23 @@ type String struct {
 	Fragments []*StringFragment `"\"" @@* "\""`
 }
 
-func (s *String) accept(visitor VisitorFunc) error {
-	return visitor(s, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, frag := range s.Fragments {
-			if frag.Expr != nil {
-				if err = VisitFunc(frag.Expr, visitor); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
+func (s *String) children() (children []Node) {
+	for _, frag := range s.Fragments {
+		children = append(children, frag)
+	}
+	return
 }
 
 type StringFragment struct {
+	Mixin
+
 	Escaped string `(  @Escaped`
 	Expr    *Expr  ` | "{" @@ "}"`
 	String  string ` | @Chars)`
+}
+
+func (s *StringFragment) children() (children []Node) {
+	return []Node{s.Expr}
 }
 
 type Bool bool
@@ -403,34 +317,8 @@ type Literal struct {
 	Array     *ArrayLiteral     `| @@`
 }
 
-func (l *Literal) accept(visitor VisitorFunc) error {
-	return visitor(l, func(err error) error {
-		if err != nil {
-			return err
-		}
-		switch {
-		case l.Number != nil:
-			return nil
-
-		case l.Str != nil:
-			return VisitFunc(l.Str, visitor)
-
-		case l.LitStr != nil:
-			return nil
-
-		case l.Bool != nil:
-			return nil
-
-		case l.DictOrSet != nil:
-			return VisitFunc(l.DictOrSet, visitor)
-
-		case l.Array != nil:
-			return VisitFunc(l.Array, visitor)
-
-		default:
-			panic("??")
-		}
-	})
+func (l *Literal) children() (children []Node) {
+	return []Node{l.Str, l.DictOrSet, l.Array}
 }
 
 func (l *Literal) Describe() string {
@@ -467,18 +355,11 @@ type DictOrSetLiteral struct {
 	Entries []*DictOrSetEntryLiteral `"{" @@ ( "," @@ )* ","? "}"`
 }
 
-func (d DictOrSetLiteral) accept(visitor VisitorFunc) error {
-	return visitor(d, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, entry := range d.Entries {
-			if err = VisitFunc(entry, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (d *DictOrSetLiteral) children() (children []Node) {
+	for _, entry := range d.Entries {
+		children = append(children, entry)
+	}
+	return
 }
 
 // DictOrSetEntryLiteral in the form {"key0": 1, "key1": 2} or {1, 2, 3}
@@ -491,19 +372,8 @@ type DictOrSetEntryLiteral struct {
 	Value *Expr `( ":" @@ )?`
 }
 
-func (d DictOrSetEntryLiteral) accept(visitor VisitorFunc) error {
-	return visitor(d, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(d.Key, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(d.Value, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (d *DictOrSetEntryLiteral) children() (children []Node) {
+	return []Node{d.Key, d.Value}
 }
 
 // ArrayLiteral in the form [1, 2, 3]
@@ -513,18 +383,11 @@ type ArrayLiteral struct {
 	Values []*Expr `"[" ( @@ ( "," @@ )* )? ","? "]"`
 }
 
-func (a ArrayLiteral) accept(visitor VisitorFunc) error {
-	return visitor(a, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, v := range a.Values {
-			if err = VisitFunc(v, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (a *ArrayLiteral) children() (children []Node) {
+	for _, val := range a.Values {
+		children = append(children, val)
+	}
+	return
 }
 
 // ClassLiteral in the form {field:value, field:value, ...)
@@ -549,18 +412,11 @@ type Call struct {
 	Parameters []*Expr `"(" ( @@ ( "," @@ )* )? ","? ")"`
 }
 
-func (c Call) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, p := range c.Parameters {
-			if err = VisitFunc(p, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (c *Call) children() (children []Node) {
+	for _, param := range c.Parameters {
+		children = append(children, param)
+	}
+	return
 }
 
 func peekPos(lex *lexer.PeekingLexer) lexer.Position {

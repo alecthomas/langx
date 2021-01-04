@@ -61,7 +61,10 @@ func (g *generator) genProgram(p *parser.AST) (Node, error) {
 		ID("module"),
 		List{ID("memory"), List{ID("export"), String("memory")}, Int(1)},
 	}
-	_ = parser.VisitFunc(p, g.buildDataTable(&root))
+	err := parser.Visit(p, g.buildDataTable(&root))
+	if err != nil {
+		return nil, err
+	}
 	for _, decl := range p.Decls() {
 		sdecl, err := g.genDecl(nil, decl)
 		if err != nil {
@@ -86,10 +89,10 @@ func (g *generator) buildDataTable(root *List) parser.VisitorFunc {
 		g.constants[lit] = consts
 		consts += len(str)
 	}
-	return func(node parser.Node, next parser.Next) error {
+	return func(node parser.Node, next func() error) error {
 		lit, ok := node.(*parser.Literal)
 		if !ok {
-			return next(nil)
+			return next()
 		}
 		switch {
 		case lit.LitStr != nil:
@@ -102,7 +105,7 @@ func (g *generator) buildDataTable(root *List) parser.VisitorFunc {
 				}
 			}
 		}
-		return next(nil)
+		return next()
 	}
 }
 

@@ -79,19 +79,11 @@ type AST struct {
 	Declarations []*RootDecl `@@*`
 }
 
-func (a *AST) accept(visitor VisitorFunc) error {
-	return visitor(a, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, decl := range a.Declarations {
-			err = VisitFunc(decl, visitor)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (a *AST) children() (children []Node) {
+	for _, child := range a.Declarations {
+		children = append(children, child)
+	}
+	return
 }
 
 func (a *AST) Decls() []Decl {
@@ -115,13 +107,8 @@ type RootDecl struct {
 	Func   *FuncDecl   `  | @@ ";"? ) `
 }
 
-func (r *RootDecl) accept(visitor VisitorFunc) error {
-	return visitor(r, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(r.Decl(), visitor)
-	})
+func (r *RootDecl) children() (children []Node) {
+	return []Node{r.Class, r.Import, r.Enum, r.Var, r.Func}
 }
 
 func (r *RootDecl) Decl() Decl {
@@ -153,8 +140,8 @@ type ImportDecl struct {
 	Import *String `@@`
 }
 
-func (i *ImportDecl) accept(visitor VisitorFunc) error {
-	return visitor(i, func(err error) error { return err })
+func (i *ImportDecl) children() (children []Node) {
+	return []Node{i.Import}
 }
 
 func (i *ImportDecl) decl() {}
@@ -166,21 +153,12 @@ type EnumDecl struct {
 	Members []*EnumMember  `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (e *EnumDecl) accept(visitor VisitorFunc) error {
-	return visitor(e, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(e.Type, visitor); err != nil {
-			return err
-		}
-		for _, m := range e.Members {
-			if err = VisitFunc(m, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (e *EnumDecl) children() (children []Node) {
+	children = append(children, e.Type)
+	for _, member := range e.Members {
+		children = append(children, member)
+	}
+	return
 }
 
 func (e *EnumDecl) Decls() []Decl {
@@ -202,13 +180,8 @@ type EnumMember struct {
 	FuncDecl *FuncDecl ` | @@ )`
 }
 
-func (e *EnumMember) accept(visitor VisitorFunc) error {
-	return visitor(e, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(e.Decl(), visitor)
-	})
+func (e *EnumMember) children() (children []Node) {
+	return
 }
 
 // Decl types.
@@ -234,13 +207,8 @@ type CaseDecl struct {
 	Type *TypeDecl `( "(" @@ ")" )?`
 }
 
-func (c *CaseDecl) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(c.Type, visitor)
-	})
+func (c *CaseDecl) children() (children []Node) {
+	return
 }
 
 func (c *CaseDecl) decl() {}
@@ -252,21 +220,8 @@ type ClassDecl struct {
 	Members []*ClassMember `( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (c *ClassDecl) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err := VisitFunc(c.Type, visitor); err != nil {
-			return err
-		}
-		for _, member := range c.Members {
-			if err := VisitFunc(member, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (c *ClassDecl) children() (children []Node) {
+	return
 }
 
 func (c *ClassDecl) Decls() []Decl {
@@ -291,13 +246,8 @@ type ClassMember struct {
 	InitialiserDecl *InitialiserDecl ` | @@ )`
 }
 
-func (c *ClassMember) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(c.Decl(), visitor)
-	})
+func (c *ClassMember) children() (children []Node) {
+	return
 }
 
 func (c *ClassMember) Decl() Decl {
@@ -330,18 +280,11 @@ type InitialiserDecl struct {
 	Body       *Block        `@@`
 }
 
-func (i *InitialiserDecl) accept(visitor VisitorFunc) error {
-	return visitor(i, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, p := range i.Parameters {
-			if err = VisitFunc(p, visitor); err != nil {
-				return err
-			}
-		}
-		return VisitFunc(i.Body, visitor)
-	})
+func (i *InitialiserDecl) children() (children []Node) {
+	for _, param := range i.Parameters {
+		children = append(children, param)
+	}
+	return append(children, i.Body)
 }
 
 func (i *InitialiserDecl) decl() {}
@@ -367,19 +310,8 @@ func (t *TypeDecl) String() string {
 	}
 }
 
-func (t TypeDecl) accept(visitor VisitorFunc) error {
-	return visitor(t, func(err error) error {
-		if err != nil {
-			return err
-		}
-		switch {
-		case t.Named != nil:
-			return t.Named.accept(visitor)
-
-		default:
-			panic("??")
-		}
-	})
+func (t TypeDecl) children() (children []Node) {
+	return []Node{t.Named, t.Array, t.DictOrSet}
 }
 
 // DictOrSeyTypeDecl in the form {<type>: <type>} or {<type>}
@@ -399,19 +331,8 @@ func (d *DictOrSetTypeDecl) String() string {
 	return fmt.Sprintf("{%s: %s}", d.Key, d.Value)
 }
 
-func (d *DictOrSetTypeDecl) accept(visitor VisitorFunc) error {
-	return visitor(d, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(d.Key, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(d.Value, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (d *DictOrSetTypeDecl) children() (children []Node) {
+	return []Node{d.Key, d.Value}
 }
 
 // ArrayTypeDecl in the form [<type>]
@@ -425,16 +346,8 @@ func (a *ArrayTypeDecl) String() string {
 	return fmt.Sprintf("[%s]", a.Element)
 }
 
-func (a *ArrayTypeDecl) accept(visitor VisitorFunc) error {
-	return visitor(a, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(a.Element, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (a *ArrayTypeDecl) children() (children []Node) {
+	return []Node{a.Element}
 }
 
 type NamedTypeDecl struct {
@@ -455,18 +368,11 @@ func (n *NamedTypeDecl) String() string {
 	return fmt.Sprintf("%s<%s>", n.Type, strings.Join(params, ", "))
 }
 
-func (t *NamedTypeDecl) accept(visitor VisitorFunc) error {
-	return visitor(t, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, tp := range t.TypeParameter {
-			if err = VisitFunc(tp, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (t *NamedTypeDecl) children() (children []Node) {
+	for _, param := range t.TypeParameter {
+		children = append(children, param)
+	}
+	return
 }
 
 // TypeParamDecl represents a generic type parameter and its optional constraints.
@@ -477,21 +383,14 @@ type TypeParamDecl struct {
 	Constraints []*Reference `( ":" @@ ( "," @@ )* )?`
 }
 
-func (t TypeParamDecl) accept(visitor VisitorFunc) error {
-	return visitor(t, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, c := range t.Constraints {
-			if err = VisitFunc(c, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (t *TypeParamDecl) children() (children []Node) {
+	for _, constraint := range t.Constraints {
+		children = append(children, constraint)
+	}
+	return
 }
 
-func (t TypeParamDecl) String() string {
+func (t *TypeParamDecl) String() string {
 	constraints := []string{}
 	for _, c := range t.Constraints {
 		constraints = append(constraints, c.Describe())
@@ -510,13 +409,8 @@ type Parameters struct {
 	Type  *Reference `":" @@`
 }
 
-func (p Parameters) accept(visitor VisitorFunc) error {
-	return visitor(p, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(p.Type, visitor)
-	})
+func (p *Parameters) children() (children []Node) {
+	return []Node{p.Type}
 }
 
 // VarDecl represents the declaration of new variables.
@@ -529,18 +423,11 @@ type VarDecl struct {
 	Vars []*VarDeclAsgn `"let" @@ ( "," @@ )*`
 }
 
-func (v *VarDecl) accept(visitor VisitorFunc) error {
-	return visitor(v, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, v := range v.Vars {
-			if err = VisitFunc(v, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (v *VarDecl) children() (children []Node) {
+	for _, v := range v.Vars {
+		children = append(children, v)
+	}
+	return
 }
 
 func (v *VarDecl) decl() {}
@@ -553,16 +440,8 @@ type VarDeclAsgn struct {
 	Default *Expr  `( "=" @@ )?`
 }
 
-func (v VarDeclAsgn) accept(visitor VisitorFunc) error {
-	return visitor(v, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(v.Type, visitor); err != nil {
-			return err
-		}
-		return VisitFunc(v.Default, visitor)
-	})
+func (v *VarDeclAsgn) children() (children []Node) {
+	return []Node{v.Type, v.Default}
 }
 
 // ExprStmt is either an assignment, or a function call.
@@ -576,19 +455,8 @@ type ExprStmt struct {
 	RHS *Expr `  @@ )?`
 }
 
-func (a *ExprStmt) accept(visitor VisitorFunc) error {
-	return visitor(a, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(a.LHS, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(a.RHS, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (a *ExprStmt) children() (children []Node) {
+	return []Node{a.LHS, a.RHS}
 }
 
 type Stmt struct {
@@ -606,36 +474,8 @@ type Stmt struct {
 	ExprStmt  *ExprStmt   `| @@`
 }
 
-func (s Stmt) accept(visitor VisitorFunc) error {
-	return visitor(s, func(err error) error {
-		if err != nil {
-			return err
-		}
-		switch {
-		case s.Return != nil:
-			return VisitFunc(s.Return, visitor)
-		case s.If != nil:
-			return VisitFunc(s.If, visitor)
-		case s.For != nil:
-			return VisitFunc(s.For, visitor)
-		case s.Switch != nil:
-			return VisitFunc(s.Switch, visitor)
-		case s.Block != nil:
-			return VisitFunc(s.Block, visitor)
-		case s.VarDecl != nil:
-			return VisitFunc(s.VarDecl, visitor)
-		case s.FuncDecl != nil:
-			return VisitFunc(s.FuncDecl, visitor)
-		case s.ClassDecl != nil:
-			return VisitFunc(s.ClassDecl, visitor)
-		case s.EnumDecl != nil:
-			return VisitFunc(s.EnumDecl, visitor)
-		case s.ExprStmt != nil:
-			return VisitFunc(s.ExprStmt, visitor)
-		default:
-			panic("??")
-		}
-	})
+func (s *Stmt) children() (children []Node) {
+	return []Node{s.Return, s.If, s.For, s.Switch, s.Block, s.VarDecl, s.FuncDecl, s.ClassDecl, s.EnumDecl, s.ExprStmt}
 }
 
 type Block struct {
@@ -644,18 +484,11 @@ type Block struct {
 	Statements []*Stmt `"{" ( @@ ( ";" @@ )* ";"? )? "}"`
 }
 
-func (b Block) accept(visitor VisitorFunc) error {
-	return visitor(b, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, stmt := range b.Statements {
-			if err = VisitFunc(stmt, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (b *Block) children() (children []Node) {
+	for _, stmt := range b.Statements {
+		children = append(children, stmt)
+	}
+	return
 }
 
 type ForStmt struct {
@@ -666,22 +499,8 @@ type ForStmt struct {
 	Body   *Block     `@@`
 }
 
-func (i ForStmt) accept(visitor VisitorFunc) error {
-	return visitor(i, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Target, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Source, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Body, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (i *ForStmt) children() (children []Node) {
+	return []Node{i.Target, i.Source, i.Body}
 }
 
 type IfStmt struct {
@@ -692,22 +511,8 @@ type IfStmt struct {
 	Else      *Block `( "else" @@ )?`
 }
 
-func (i IfStmt) accept(visitor VisitorFunc) error {
-	return visitor(i, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Condition, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Main, visitor); err != nil {
-			return err
-		}
-		if err = VisitFunc(i.Else, visitor); err != nil {
-			return err
-		}
-		return nil
-	})
+func (i *IfStmt) children() (children []Node) {
+	return []Node{i.Condition, i.Main, i.Else}
 }
 
 type SwitchStmt struct {
@@ -717,21 +522,12 @@ type SwitchStmt struct {
 	Cases  []*CaseStmt `@@* "}"`
 }
 
-func (s SwitchStmt) accept(visitor VisitorFunc) error {
-	return visitor(s, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(s.Target, visitor); err != nil {
-			return err
-		}
-		for _, c := range s.Cases {
-			if err = VisitFunc(c, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (s *SwitchStmt) children() (children []Node) {
+	children = []Node{s.Target}
+	for _, c := range s.Cases {
+		children = append(children, c)
+	}
+	return
 }
 
 type CaseStmt struct {
@@ -742,21 +538,12 @@ type CaseStmt struct {
 	Body    []*Stmt     `( @@ ( ";" @@ )* ";"? )?`
 }
 
-func (c CaseStmt) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(c.Case, visitor); err != nil {
-			return err
-		}
-		for _, stmt := range c.Body {
-			if err = VisitFunc(stmt, visitor); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (c *CaseStmt) children() (children []Node) {
+	children = []Node{c.Case}
+	for _, stmt := range c.Body {
+		children = append(children, stmt)
+	}
+	return
 }
 
 type CaseSelect struct {
@@ -766,16 +553,8 @@ type CaseSelect struct {
 	ExprCase *Expr     `| @@`
 }
 
-func (c CaseSelect) accept(visitor VisitorFunc) error {
-	return visitor(c, func(err error) error {
-		if err != nil {
-			return err
-		}
-		if err = VisitFunc(c.EnumCase, visitor); err != nil {
-			return err
-		}
-		return VisitFunc(c.ExprCase, visitor)
-	})
+func (c *CaseSelect) children() (children []Node) {
+	return []Node{c.EnumCase, c.ExprCase}
 }
 
 type EnumCase struct {
@@ -785,9 +564,7 @@ type EnumCase struct {
 	Var  string `( "(" @Ident ")" )?`
 }
 
-func (e EnumCase) accept(visitor VisitorFunc) error {
-	return visitor(e, func(err error) error { return err })
-}
+func (e *EnumCase) children() (children []Node) { return }
 
 type ReturnStmt struct {
 	Mixin
@@ -795,13 +572,8 @@ type ReturnStmt struct {
 	Value *Expr `"return" @@?`
 }
 
-func (r ReturnStmt) accept(visitor VisitorFunc) error {
-	return visitor(r, func(err error) error {
-		if err != nil {
-			return err
-		}
-		return VisitFunc(r.Value, visitor)
-	})
+func (r *ReturnStmt) children() (children []Node) {
+	return []Node{r.Value}
 }
 
 type FuncDecl struct {
@@ -814,21 +586,12 @@ type FuncDecl struct {
 	Body       *Block        `@@`
 }
 
-func (f *FuncDecl) accept(visitor VisitorFunc) error {
-	return visitor(f, func(err error) error {
-		if err != nil {
-			return err
-		}
-		for _, p := range f.Parameters {
-			if err = VisitFunc(p, visitor); err != nil {
-				return err
-			}
-		}
-		if err = VisitFunc(f.Return, visitor); err != nil {
-			return err
-		}
-		return VisitFunc(f.Body, visitor)
-	})
+func (f *FuncDecl) children() (children []Node) {
+	for _, param := range f.Parameters {
+		children = append(children, param)
+	}
+	children = append(children, f.Return, f.Body)
+	return
 }
 
 func (f *FuncDecl) decl() {}

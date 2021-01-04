@@ -574,6 +574,9 @@ func (a *analyser) checkStatements(scope *Scope, statements []*parser.Stmt) erro
 
 func (a *analyser) checkVarDecl(scope *Scope, varDecl *parser.VarDecl) error {
 	var untyped []*parser.VarDeclAsgn // Collect any vars that don't end up with types associated.
+	if len(varDecl.Vars) == 0 {
+		panic("no variables in decl")
+	}
 	var last *parser.VarDeclAsgn
 	for _, decl := range varDecl.Vars {
 		last = decl
