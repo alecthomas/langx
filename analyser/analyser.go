@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/alecthomas/participle"
-	"github.com/alecthomas/participle/lexer"
+	"github.com/alecthomas/participle/v2"
+	"github.com/alecthomas/participle/v2/lexer"
 
 	"github.com/alecthomas/langx/parser"
 	"github.com/alecthomas/langx/types"

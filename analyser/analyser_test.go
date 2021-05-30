@@ -674,7 +674,7 @@ func TestAnalyser(t *testing.T) {
 					// 2. Generic instantiation of Pair<string, int>(1).
 					//
 					// Currently only the latter is supported.
-					let a = add(Pair<string, int>(1))
+					let a = add(1, Pair<string, int>(1))
 				}
 			`},
 	}

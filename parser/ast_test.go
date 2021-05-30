@@ -118,12 +118,11 @@ func TestParse(t *testing.T) {
 			source: `
 				let a = b[10].c()
 				`},
-		// TODO: Fails with: 3:4: unexpected token "<EOF>" (expected ";")
-		// {name: "GenericReference",
-		// 	source: `
-		// 		let a: Pair<string, int>
-		// 	`,
-		// },
+		{name: "GenericReference",
+			source: `
+				let a: Pair<string, int>
+			`,
+		},
 		{name: "OptionalValue",
 			source: `
 				let a: string? = "hello"

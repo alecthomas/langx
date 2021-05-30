@@ -8,7 +8,7 @@ import (
 )
 
 func TestLexer(t *testing.T) {
-	tokens, err := parser.Lex(strings.NewReader(`
+	tokens, err := parser.Lex("", strings.NewReader(`
 	// Comment
 	fn foo() { /* Multi-line
 		comment */
@@ -17,7 +17,7 @@ func TestLexer(t *testing.T) {
 		}
 		a += 1 + \
 			 2
-		b = ` + "`literal string`" + `
+		b = `+"`literal string`"+`
 	}
 	`))
 	require.NoError(t, err)

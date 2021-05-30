@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/alecthomas/participle"
-	"github.com/alecthomas/participle/lexer"
+	"github.com/alecthomas/participle/v2"
+	"github.com/alecthomas/participle/v2/lexer"
 )
 
 // Expr represents an expression.
@@ -210,7 +210,7 @@ type ReferenceNext struct {
 
 	Subscript      *Expr        `(   "[" @@ "]"`
 	Reference      *Terminal    `  | "." @@`
-	Specialisation []*Reference `  | "<" @@ ( "," @@ )* ","? ">"`
+	Specialisation []*Reference `  | "<" @@ ( "," @@ )* ","? ">" (?= "(" | ";" | "=" | "." )` // https://stackoverflow.com/a/56519680
 	Call           *Call        `  | @@ )`
 
 	Next *ReferenceNext `@@?`
@@ -388,22 +388,6 @@ func (a *ArrayLiteral) children() (children []Node) {
 		children = append(children, val)
 	}
 	return
-}
-
-// ClassLiteral in the form {field:value, field:value, ...)
-type ClassLiteral struct {
-	Mixin
-
-	Fields []*ClassLiteralField `"{" ( @@ ( "," @@ )* )? ","? "}"`
-}
-
-type ClassLiteralField struct {
-	Mixin
-
-	Key string `@Ident ":"`
-
-	Nested *ClassLiteral `(  @@`
-	Value  *Expr         ` | @@ )`
 }
 
 type Call struct {

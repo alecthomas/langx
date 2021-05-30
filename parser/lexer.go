@@ -3,14 +3,14 @@ package parser
 import (
 	"io"
 
-	"github.com/alecthomas/participle/lexer"
+	"github.com/alecthomas/participle/v2/lexer"
 )
 
 // A Lexer that inserts semi-colons and collapses \-separated lines.
 type fixupLexerDefinition struct{}
 
-func (l *fixupLexerDefinition) Lex(r io.Reader) (lexer.Lexer, error) { // nolint: golint
-	ll, err := lex.Lex(r)
+func (l *fixupLexerDefinition) Lex(path string, r io.Reader) (lexer.Lexer, error) { // nolint: golint
+	ll, err := lex.Lex(path, r)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ next:
 			l.last = token
 			continue next
 
-		case "break", "continue", "fallthrough", "return", "++", "--", ")", "}", "]":
+		case "break", "continue", "fallthrough", "return", "++", "--", ")", "}", "]", ">":
 			token.Value = ";"
 			token.Type = ';'
 

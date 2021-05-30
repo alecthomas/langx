@@ -5,14 +5,14 @@ import (
 	"io"
 	"strings"
 
-	"github.com/alecthomas/participle"
-	"github.com/alecthomas/participle/lexer"
-	"github.com/alecthomas/participle/lexer/stateful"
+	"github.com/alecthomas/participle/v2"
+	"github.com/alecthomas/participle/v2/lexer"
+	"github.com/alecthomas/participle/v2/lexer/stateful"
 )
 
 var (
 	// Note: "lex" is in this file to ensure correct initialisation ordering.
-	lex = lexer.Must(stateful.New(stateful.Rules{
+	lex = stateful.Must(stateful.Rules{
 		"Root": {
 			{"comment", `//.*|(?s:/\*.*?\*/)`, nil},
 			{"backslash", `\\`, nil},
@@ -40,7 +40,7 @@ var (
 			{"ExprEnd", `}`, stateful.Pop()},
 			stateful.Include("Root"),
 		},
-	}))
+	})
 	parser = participle.MustBuild(&AST{},
 		participle.Lexer(&fixupLexerDefinition{}),
 		participle.UseLookahead(1),
@@ -598,10 +598,10 @@ func (f *FuncDecl) decl() {}
 
 func Parse(r io.Reader) (*AST, error) {
 	ast := &AST{}
-	return ast, parser.Parse(r, ast)
+	return ast, parser.Parse("", r, ast)
 }
 
 func ParseString(s string) (*AST, error) {
 	ast := &AST{}
-	return ast, parser.ParseString(s, ast)
+	return ast, parser.ParseString("", s, ast)
 }
