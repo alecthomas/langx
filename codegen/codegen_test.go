@@ -4,8 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/langx/analyser"
 	"github.com/alecthomas/langx/parser"
 )
@@ -101,13 +100,13 @@ func TestCodeGen(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ast, err := parser.Parse(strings.NewReader(test.input))
-			require.NoError(t, err, test.input)
+			assert.NoError(t, err, test.input)
 			program, err := analyser.Analyse(ast)
-			require.NoError(t, err, test.input)
+			assert.NoError(t, err, test.input)
 			w := &strings.Builder{}
 			err = Generate(w, program)
-			require.NoError(t, err, test.input)
-			require.Equal(t, strings.TrimSpace(test.output), strings.TrimSpace(w.String()))
+			assert.NoError(t, err, test.input)
+			assert.Equal(t, strings.TrimSpace(test.output), strings.TrimSpace(w.String()))
 			t.Log(test.input)
 			t.Log("\n" + w.String())
 		})

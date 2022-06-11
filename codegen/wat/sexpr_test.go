@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestSExpr(t *testing.T) {
@@ -31,7 +31,7 @@ func TestSExpr(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			w := &strings.Builder{}
 			test.expr.write("", w)
-			require.Equal(t, test.expected, w.String())
+			assert.Equal(t, test.expected, w.String())
 		})
 	}
 }

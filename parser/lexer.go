@@ -17,7 +17,7 @@ func (l *fixupLexerDefinition) Lex(path string, r io.Reader) (lexer.Lexer, error
 	return &fixupLexer{lexer: ll}, nil
 }
 
-func (l *fixupLexerDefinition) Symbols() map[string]rune { // nolint: golint
+func (l *fixupLexerDefinition) Symbols() map[string]lexer.TokenType { // nolint: golint
 	return lex.Symbols()
 }
 

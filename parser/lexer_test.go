@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestLexer(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLexer(t *testing.T) {
 		b = `+"`literal string`"+`
 	}
 	`))
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	actual := []string{}
 	for _, token := range tokens {
 		if token.Type == parser.Lexer().Symbols()["Whitespace"] {
@@ -32,5 +32,5 @@ func TestLexer(t *testing.T) {
 		"fn", "foo", "(", ")", "{", "if", "true", "{", "print", "(", "\"", "hello", "\"", ")", ";", "}", ";", "a", "+=",
 		"1", "+", "2", ";", "b", "=", "literal string", "}", ";", "",
 	}
-	require.Equal(t, expected, actual)
+	assert.Equal(t, expected, actual)
 }

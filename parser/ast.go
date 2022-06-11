@@ -7,12 +7,11 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
-	"github.com/alecthomas/participle/v2/lexer/stateful"
 )
 
 var (
 	// Note: "lex" is in this file to ensure correct initialisation ordering.
-	lex = stateful.Must(stateful.Rules{
+	lex = lexer.MustStateful(lexer.Rules{
 		"Root": {
 			{"comment", `//.*|(?s:/\*.*?\*/)`, nil},
 			{"backslash", `\\`, nil},
@@ -22,7 +21,7 @@ var (
 			{"Keyword", `\b(in|switch|case|default|if|enum|alias|let|fn|break|continue|for|throws|import|new)\b`, nil},
 			{"Ident", `\b([[:alpha:]_]\w*)\b`, nil},
 			{"Number", `\b(\d+(\.\d+)?)\b`, nil},
-			{"String", `"`, stateful.Push("String")},
+			{"String", `"`, lexer.Push("String")},
 			{"LiteralString", `` + "`.*?`|'.*?'" + ``, nil},
 			{"Newline", `\n`, nil},
 			{"Operator", `->|%=|>=|<=|&&|\|\||==|!=`, nil},
@@ -32,13 +31,13 @@ var (
 		},
 		"String": {
 			{"Escaped", `\\.`, nil},
-			{"StringEnd", `"`, stateful.Pop()},
-			{"Expr", `{`, stateful.Push("StringExpr")},
+			{"StringEnd", `"`, lexer.Pop()},
+			{"Expr", `{`, lexer.Push("StringExpr")},
 			{"Chars", `[^{"\\]+`, nil},
 		},
 		"StringExpr": {
-			{"ExprEnd", `}`, stateful.Pop()},
-			stateful.Include("Root"),
+			{"ExprEnd", `}`, lexer.Pop()},
+			lexer.Include("Root"),
 		},
 	})
 	parser = participle.MustBuild(&AST{},

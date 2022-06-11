@@ -4,11 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alecthomas/repr"
-	"github.com/stretchr/testify/require"
-
+	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/langx/parser"
 	"github.com/alecthomas/langx/types"
+	"github.com/alecthomas/repr"
 )
 
 func TestAnalyser(t *testing.T) {
@@ -684,17 +683,17 @@ func TestAnalyser(t *testing.T) {
 			ast, err := parser.ParseString(test.input + "\n")
 			if err != nil {
 				if test.fail == "" {
-					require.NoError(t, err, test.input)
+					assert.NoError(t, err, test.input)
 				} else {
-					require.EqualError(t, err, test.fail, test.input)
+					assert.EqualError(t, err, test.fail, test.input)
 				}
 				return
 			}
 			program, err := Analyse(ast)
 			if test.fail != "" {
-				require.EqualError(t, err, test.fail, test.input)
+				assert.EqualError(t, err, test.fail, test.input)
 			} else {
-				require.NoError(t, err, test.input)
+				assert.NoError(t, err, test.input)
 				if test.refs != nil {
 					for key, ref := range test.refs {
 						expected := ref.ref
@@ -702,7 +701,7 @@ func TestAnalyser(t *testing.T) {
 						if ref.fix != nil {
 							ref.fix(actual)
 						}
-						require.Equal(t, repr.String(expected, repr.Indent("  ")), repr.String(actual, repr.Indent("  ")), test.input)
+						assert.Equal(t, repr.String(expected, repr.Indent("  ")), repr.String(actual, repr.Indent("  ")), test.input)
 					}
 				}
 			}

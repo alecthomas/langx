@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/repr"
-	"github.com/stretchr/testify/require"
 )
 
 // This source should contain all constructs supported by the parser.
@@ -155,9 +155,9 @@ func TestParse(t *testing.T) {
 				repr.Println(ast)
 			}
 			if test.fail != "" {
-				require.EqualError(t, err, test.fail)
+				assert.EqualError(t, err, test.fail)
 			} else {
-				require.NoError(t, err, repr.String(ast, repr.Indent("  ")))
+				assert.NoError(t, err, repr.String(ast, repr.Indent("  ")))
 			}
 		})
 	}

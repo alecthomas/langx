@@ -65,9 +65,9 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 		return nil, err
 	}
 	for {
-		token, err := lex.Peek(0)
-		if err != nil {
-			return nil, err
+		token := lex.Peek()
+		if token.EOF() {
+			break
 		}
 		expr := &Expr{Mixin: Mixin{token.Pos}}
 		if token.Type != operatorToken && token.Type != singleOperatorToken {
@@ -80,7 +80,7 @@ func parseExpr(lex *lexer.PeekingLexer, minPrec int) (*Expr, error) {
 		if info[expr.Op].Priority < minPrec {
 			break
 		}
-		_, _ = lex.Next()
+		lex.Next()
 		nextMinPrec := info[expr.Op].Priority
 		if !info[expr.Op].RightAssociative {
 			nextMinPrec++
@@ -404,6 +404,5 @@ func (c *Call) children() (children []Node) {
 }
 
 func peekPos(lex *lexer.PeekingLexer) lexer.Position {
-	tok, _ := lex.Peek(0)
-	return tok.Pos
+	return lex.Peek().Pos
 }
